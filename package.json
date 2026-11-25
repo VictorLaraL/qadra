@@ -1,0 +1,26 @@
+{
+  "name": "qadra",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Cobranza inteligente con CoDi: el gestor cobra en campo sin efectivo y cada pago se concilia solo.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "wrangler d1 migrations apply qadra --local && wrangler dev --port 8790 --test-scheduled",
+    "test": "node --test \"tests/*.test.ts\"",
+    "typecheck": "wrangler types && tsc --noEmit",
+    "e2e": "node --test herramientas/e2e-local.ts",
+    "simular:pago": "node herramientas/simular-pago.ts",
+    "db:remote": "wrangler d1 migrations apply qadra --remote",
+    "deploy": "wrangler d1 migrations apply qadra --remote && wrangler deploy"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "qrcode-generator": "1.4.4",
+    "standardwebhooks": "^1.0.0",
+    "typescript": "^5.9.0",
+    "wrangler": "^4.0.0"
+  }
+}

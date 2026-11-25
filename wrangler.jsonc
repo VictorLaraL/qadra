@@ -1,0 +1,48 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "qadra",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-11-23",
+
+  // Landing, app del gestor, portal y página de pago: archivos estáticos.
+  // Las rutas /api y /webhooks las atiende el Worker.
+  "assets": {
+    "directory": "./web",
+    "binding": "ASSETS"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "qadra",
+      // Base creada con `wrangler d1 create qadra --location wnam`. Para tu propia cuenta, crea la tuya y cambia el id.
+      "database_id": "5b59e432-fdd7-4fab-92f6-1a3586d33a4c",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Difusor: reparte en vivo cada pago a la app del gestor, al portal, a la página de pago y a la landing
+  // con WebSockets en hibernación.
+  "durable_objects": {
+    "bindings": [{ "name": "DIFUSOR", "class_name": "Difusor" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Difusor"] }],
+
+  // Cada 5 minutos: pone al día la cartera de ejemplo de la demo (nuevo día y pagos de ejemplo de otros gestores).
+  "triggers": { "crons": ["*/5 * * * *"] },
+
+  "vars": {
+    // 1 = si todavía no hay PEY_API_KEY, los cobros son simulados y se rotulan como SIMULADO.
+    // En cuanto se configura PEY_API_KEY, la simulación se apaga sola.
+    "SIMULACION": "1",
+    // Tope de cada cobro real en la demo pública, en centavos (100 = $1.00). 0 = sin tope.
+    "TOPE_DEMO_CENTAVOS": "100",
+    // 1 = bloquea cobros y gestiones fuera del horario de 7:00 a 22:00 (CONDUSEF). En la demo solo se avisa.
+    "HORARIO_ESTRICTO": "0"
+  },
+
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true }
+  }
+}

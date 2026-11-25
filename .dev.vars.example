@@ -1,0 +1,13 @@
+# Copia este archivo a .dev.vars para correr en local (nunca se sube a git).
+
+# Clave del administrador de la financiera: entra a la app del gestor y al portal, y puede importar cartera.
+PORTAL_TOKEN=cambia-esta-clave
+# Clave del jurado: usa la app del gestor y ve el portal, pero no puede reemplazar la cartera ni reiniciar la demo.
+JURADO_TOKEN=cambia-esta-otra-clave
+
+# Secreto con el que pey firma los avisos (formato whsec_<base64>). En producción se copia del portal de pey.
+# Este valor de ejemplo solo sirve en local.
+PEY_WEBHOOK_SECRET=whsec_UWFkcmEtc2VjcmV0by1zb2xvLWxvY2FsLTAwMDE=
+
+# API key de pey. Vacía = los cobros se simulan (ver SIMULACION en wrangler.jsonc).
+PEY_API_KEY=
