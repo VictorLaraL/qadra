@@ -13,9 +13,20 @@ function esObjeto(valor: unknown): valor is Objeto {
 
 const ID_CREDITO = /^[A-Za-z0-9-]{1,12}$/;
 
+/** Número de crédito de la financiera: de 1 a 12 letras, números o guiones. La misma regla al importar y al cobrar. */
+export function esIdCredito(valor: string): boolean {
+  return ID_CREDITO.test(valor);
+}
+
+/** Celular de 10 dígitos sin espacios ni guiones, o null si no lo es. */
+export function limpiarCelular(valor: unknown): string | null {
+  const digitos = typeof valor === "string" ? valor.replace(/[\s-]/g, "") : "";
+  return /^\d{10}$/.test(digitos) ? digitos : null;
+}
+
 function idCredito(valor: unknown): string | null {
   const id = typeof valor === "string" ? valor.trim() : "";
-  return ID_CREDITO.test(id) ? id : null;
+  return esIdCredito(id) ? id : null;
 }
 
 export interface SolicitudCobro {
@@ -50,8 +61,8 @@ export function validarCobro(e: unknown, limites: { saldoCentavos: number; topeC
 
   let telefono: string | null = null;
   if (e.medio === "push") {
-    telefono = typeof e.telefono === "string" ? e.telefono.replace(/[\s-]/g, "") : "";
-    if (!/^\d{10}$/.test(telefono)) return { ok: false, error: "El celular debe tener 10 dígitos." };
+    telefono = limpiarCelular(e.telefono);
+    if (telefono === null) return { ok: false, error: "El celular debe tener 10 dígitos." };
   }
   return { ok: true, valor: { creditoId, montoCentavos: monto, medio: e.medio, telefono } };
 }

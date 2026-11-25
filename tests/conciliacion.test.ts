@@ -113,7 +113,21 @@ test("cuadre con pey: cuadra cuando los mismos pagos están en los dos lados", (
     faltanEnQadra: [],
     faltanEnPey: [],
     montosDistintos: [],
+    repetidos: [],
   });
+});
+
+test("cuadre con pey: un pago registrado dos veces nunca cuadra, aunque exista en los dos lados", () => {
+  const r = compararConPey(
+    [
+      { transactionId: "TX1", montoCentavos: 100 },
+      { transactionId: "TX1", montoCentavos: 100 },
+    ],
+    [{ transactionId: "TX1", montoCentavos: 100 }],
+  );
+  assert.equal(r.cuadra, false);
+  assert.deepEqual(r.repetidos, ["TX1"]);
+  assert.deepEqual([r.qadra.totalCentavos, r.pey.totalCentavos], [200, 100]);
 });
 
 test("cuadre con pey: señala el pago que pey cobró y Qadra no registró (aviso perdido)", () => {

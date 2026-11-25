@@ -77,9 +77,16 @@ test("un aviso sin monto válido o sin transacción no se registra como pago", (
   assert.equal(esEventoDePago({ ...AVISO_QR, amount: null }), true, "sigue siendo un evento de pago, aunque incompleto");
 });
 
-test("acepta el monto como texto decimal y redondea al centavo", () => {
+test("acepta el monto como número o como texto con hasta dos decimales", () => {
   assert.equal(normalizarPago("msg_6", { ...AVISO_QR, amount: "450.10" }, AHORA)?.montoCentavos, 45_010);
+  assert.equal(normalizarPago("msg_6", { ...AVISO_QR, amount: " 13.5 " }, AHORA)?.montoCentavos, 1_350);
   assert.equal(normalizarPago("msg_6", { ...AVISO_QR, amount: 0.07 }, AHORA)?.montoCentavos, 7);
+});
+
+test("un monto en cero o con fracciones de centavo no es un pago: no se redondea en silencio", () => {
+  for (const amount of [0, "0", "0.00", "0.004", 0.004, "13.505", 13.505]) {
+    assert.equal(normalizarPago("msg_6", { ...AVISO_QR, amount }, AHORA), null, `amount=${JSON.stringify(amount)}`);
+  }
 });
 
 test("una fecha de pago fuera de rango se cambia por la hora de recepción", () => {

@@ -106,6 +106,8 @@ export interface Cuadre {
   /** Pagos que Qadra tiene y pey no reporta. */
   faltanEnPey: PagoComparable[];
   montosDistintos: Array<{ transactionId: string; qadraCentavos: number; peyCentavos: number }>;
+  /** Transacciones que aparecen más de una vez en alguno de los dos lados: un pago registrado dos veces. */
+  repetidos: string[];
 }
 
 /** Compara los pagos CoDi registrados en Qadra con los que reporta pey para el mismo periodo. */
@@ -120,12 +122,22 @@ export function compararConPey(qadra: PagoComparable[], pey: PagoComparable[]): 
     .filter((p) => enPey.has(p.transactionId) && enPey.get(p.transactionId) !== p.montoCentavos)
     .map((p) => ({ transactionId: p.transactionId, qadraCentavos: p.montoCentavos, peyCentavos: enPey.get(p.transactionId) as number }));
 
+  const repetidosEn = (lista: PagoComparable[]) => lista.map((p) => p.transactionId).filter((id, i, ids) => ids.indexOf(id) !== i);
+  const repetidos = [...new Set([...repetidosEn(qadra), ...repetidosEn(pey)])];
+
   return {
-    cuadra: faltanEnQadra.length === 0 && faltanEnPey.length === 0 && montosDistintos.length === 0,
+    // Además de los mismos pagos, los totales deben coincidir: un pago repetido en un lado nunca cuadra.
+    cuadra:
+      faltanEnQadra.length === 0 &&
+      faltanEnPey.length === 0 &&
+      montosDistintos.length === 0 &&
+      repetidos.length === 0 &&
+      total(qadra) === total(pey),
     qadra: { pagos: qadra.length, totalCentavos: total(qadra) },
     pey: { pagos: pey.length, totalCentavos: total(pey) },
     faltanEnQadra,
     faltanEnPey,
     montosDistintos,
+    repetidos,
   };
 }

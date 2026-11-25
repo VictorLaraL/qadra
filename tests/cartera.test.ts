@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { aCsv, generarCuotas, leerCsv, PLANTILLA_CARTERA, validarCartera } from "../src/core/cartera.ts";
+import { validarCobro } from "../src/core/validaciones.ts";
 
 const HOY = "2026-11-25";
 const ENCABEZADO =
@@ -109,6 +110,38 @@ test("cada error dice el renglón del archivo, la columna y qué se esperaba", (
   assert.match(r.errores[4].mensaje, /10 dígitos/);
   assert.equal(r.creditos.length, 1, "solo se regresan los renglones válidos");
   assert.deepEqual({ filas: r.resumen.filas, validas: r.resumen.validas, conErrores: r.resumen.conErrores }, { filas: 8, validas: 1, conErrores: 7 });
+});
+
+test("el renglón del error es el del archivo aunque haya renglones vacíos o celdas de varias líneas", () => {
+  const texto = [
+    ENCABEZADO, // renglón 1
+    "", // 2: vacío
+    FILA.replace("Calle 21 #104", '"Calle 21 #104\nentre 18 y 20"'), // 3 y 4: una celda con salto de línea
+    "", // 5: vacío
+    FILA.replace("004512", "B2").replace("450.00", "cero"), // 6
+  ].join("\n");
+  const r = validarCartera(texto, HOY);
+  assert.deepEqual(
+    r.errores.map((e) => `${e.fila}:${e.columna}`),
+    ["6:monto_cuota"],
+  );
+  assert.equal(r.creditos[0].domicilio, "Calle 21 #104\nentre 18 y 20");
+});
+
+test("la regla del número de crédito y del celular es la misma al importar y al cobrar", () => {
+  const casos: Array<[string, boolean]> = [
+    ["A-1001", true],
+    ["004512", true],
+    ["crédito 1", false],
+    ["1234567890123", false],
+  ];
+  for (const [id, valido] of casos) {
+    const importado = validarCartera([ENCABEZADO, FILA.replace("004512", id)].join("\n"), HOY).ok;
+    const cobrable = validarCobro({ creditoId: id, montoCentavos: 1, medio: "qr" }, { saldoCentavos: 1, topeCentavos: 0 }).ok;
+    assert.deepEqual([importado, cobrable], [valido, valido], id);
+  }
+  const conCelular = validarCartera([ENCABEZADO, FILA.replace("9991234567", "999 123-4567")].join("\n"), HOY);
+  assert.equal(conCelular.creditos[0]?.telefono, "9991234567");
 });
 
 test("un archivo vacío, sin renglones de datos o con más de 500 créditos se rechaza con un mensaje claro", () => {

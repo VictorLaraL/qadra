@@ -1,6 +1,8 @@
 // Convierte el aviso de pago de pey en un objeto propio, en centavos y con lo necesario para conciliar.
 // Documentado en docs.pey.mx/docs/webhooks/codi/qr y /codi/pn (versión 2026-10-20 del API).
 
+import { aCentavos } from "./dinero.ts";
+
 export interface PagoRecibido {
   webhookId: string;
   /** qr = pagaron un QR; pn = aceptaron un cobro enviado al celular (push). */
@@ -85,13 +87,11 @@ export function normalizarPago(webhookId: string, aviso: unknown, ahora = new Da
   if (!coincidencia) return null;
 
   const transactionId = texto(datos.transactionId);
-  // Solo un número, o un texto decimal simple ("13.50"). Number() convierte null, "", true o [5] en números
-  // y un aviso sin monto válido no debe registrarse como pago.
+  // El monto se lee con la misma regla que el resto del sistema: número o texto con hasta dos decimales.
+  // Un aviso sin monto, en cero o con fracciones de centavo no se registra como pago ni se redondea en silencio.
   const crudo = datos.amount;
-  const montoValido = typeof crudo === "number" || (typeof crudo === "string" && /^\s*\d+(\.\d+)?\s*$/.test(crudo));
-  if (!montoValido) return null;
-  const monto = Number(crudo);
-  if (!transactionId || !Number.isFinite(monto) || monto < 0) return null;
+  const montoCentavos = typeof crudo === "number" || typeof crudo === "string" ? aCentavos(crudo) : null;
+  if (!transactionId || montoCentavos === null || montoCentavos === 0) return null;
 
   const metadataPey = esObjeto(datos.metadata) ? datos.metadata : {};
   let nuestra: unknown = metadataPey.externalMetadata ?? {};
@@ -116,7 +116,7 @@ export function normalizarPago(webhookId: string, aviso: unknown, ahora = new Da
     webhookId,
     tipo: coincidencia[1] as "qr" | "pn",
     transactionId,
-    montoCentavos: Math.round(monto * 100),
+    montoCentavos,
     concepto: String(datos.concept ?? ""),
     codiQrId: texto(datos.codiQrId),
     numRef: texto(datos.numRef),
