@@ -1,0 +1,23 @@
+# Dependencias y builds
+node_modules/
+dist/
+.wrangler/
+
+# Secretos locales: nunca se suben
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.env
+*.env
+
+# Notas privadas, estrategia del producto y pruebas con dinero real: se quedan en local
+privado/
+qr-prueba-*.png
+
+# Configuración local de herramientas
+.engram/
+.atl/
+
+.DS_Store
+Thumbs.db
+worker-configuration.d.ts
