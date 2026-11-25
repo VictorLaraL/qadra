@@ -1,38 +1,50 @@
-// API de la app del gestor y del portal (/api/app/...). Todo pide una clave de acceso (Authorization: Bearer).
+// API de la app del gestor y del portal (/api/app/...). Todo pide una clave de acceso (Authorization: Bearer),
+// menos abrir el canal en vivo, que pide un boleto de corta vida.
 //
-// GET  /api/app/sesion              quién entró, modo de la demo y datos de la financiera
-// GET  /api/app/creditos/:id        ficha del crédito
-// POST /api/app/cobros              crea un cobro CoDi (QR o cobro al celular) en pey
-// GET  /api/app/cobros/:id          estado del cobro y recibo si ya se pagó
-// POST /api/app/reiniciar           vuelve a cargar la cartera de ejemplo (solo administrador)
+// Sesión y canal en vivo
+//   GET  /api/app/sesion                    quién entró, modo de la demo y datos de la financiera
+//   GET  /api/app/boleto?canal=             boleto de 60 s para abrir el canal en vivo "portal" o "gestor"
+//   GET  /api/app/en-vivo?canal=&boleto=    WebSocket con cada pago y visita al instante
+// App del gestor
+//   GET  /api/app/ruta?gestor=              ruta del día
+//   GET  /api/app/creditos/:id              ficha del crédito
+//   POST /api/app/cobros                    crea un cobro CoDi (QR o cobro al celular) en pey
+//   GET  /api/app/cobros/:id                estado del cobro y recibo si ya se pagó
+//   POST /api/app/gestiones                 registra una visita (promesa, no localizado...)
+// Portal
+//   GET  /api/app/resumen                   cobranza de hoy, cartera, semana y gestores
+//   GET  /api/app/cartera                   créditos con búsqueda, filtro y páginas
+//   GET  /api/app/conciliacion              pagos de hoy y excepciones
+//   GET  /api/app/corte?pey=1               corte del día y cuadre contra pey
+//   POST /api/app/corte/recuperar           trae de pey un pago cuyo aviso no llegó
+//   POST /api/app/excepciones/:tx/resolver  aplica una excepción a un crédito
+//   GET  /api/app/pagos.csv                 pagos de hoy para el sistema de la financiera
+//   GET  /api/app/cartera/plantilla.csv     plantilla de cartera
+//   POST /api/app/cartera/validar           revisa un CSV de cartera sin cargarlo
+//   POST /api/app/cartera/importar          reemplaza la cartera (solo administrador)
+//   POST /api/app/creditos/:id/qr-fijo      crea el QR fijo de un crédito (solo administrador)
+//   POST /api/app/reiniciar                 vuelve a cargar la cartera de ejemplo (solo administrador)
+//   POST /api/app/simular                   pagos simulados (solo en modo simulación)
 
+import { aCsv, PLANTILLA_CARTERA, validarCartera } from "../core/cartera.ts";
 import { estadoCredito } from "../core/conciliacion.ts";
 import { FINANCIERA } from "../core/ejemplo.ts";
 import { dentroDeHorario, diaCdmx, HORARIO_GESTION } from "../core/fechas.ts";
-import { esIdCredito, validarCobro } from "../core/validaciones.ts";
-import { cobroPorId, cobroVisible, crearCobro, reciboDelCobro, resumenDelCobro, VIGENCIA_SEG } from "./cobros.ts";
+import { normalizarPago } from "../core/pagos.ts";
+import { firmarBoleto, generarId, verificarBoleto } from "../core/tokens.ts";
+import { esIdCredito, paginaPedida, validarCobro, validarGestion } from "../core/validaciones.ts";
+import { asegurarQrFijo, cobroPorId, cobroVisible, crearCobro, estadoDelCobro, reciboDelCobro, resumenDelCobro, VIGENCIA_SEG } from "./cobros.ts";
+import { conciliarPago, resolverExcepcion } from "./conciliar.ts";
 import { detalleDeCredito } from "./consultas.ts";
-import { credito, cuotasDe, gestores } from "./db.ts";
-import { horarioEstricto, huellaIp, modoSimulacion, rolDe, topeDemo, type Rol } from "./entorno.ts";
+import { credito, cuotasDe, gestores, sentenciasDeCartera, type CreditoPorCargar } from "./db.ts";
+import { horarioEstricto, huellaIp, modoSimulacion, rolDe, secretoBoletos, topeDemo, type Rol } from "./entorno.ts";
 import type { Avisador } from "./eventos.ts";
-import { json, log } from "./http.ts";
-import { consumir, LIMITES } from "./limites.ts";
-import { ErrorPey, mensajeDePey } from "./pey.ts";
+import { json, leerJson, leerTextoLimitado, log } from "./http.ts";
+import { consumir, LIMITES, type Limite } from "./limites.ts";
+import { consultarTransaccion, ErrorPey, mensajeDePey } from "./pey.ts";
 import { ponerAlDia, reiniciarDemo } from "./semilla.ts";
-
-const CUERPO_MAXIMO = 8 * 1024;
-
-/** Lee un cuerpo JSON pequeño. Regresa null si es demasiado grande o no es JSON. */
-export async function leerJson(request: Request, maximo = CUERPO_MAXIMO): Promise<unknown | null> {
-  if (Number(request.headers.get("content-length") ?? 0) > maximo) return null;
-  const texto = await request.text();
-  if (texto.length > maximo) return null;
-  try {
-    return JSON.parse(texto) as unknown;
-  } catch {
-    return null;
-  }
-}
+import { simularPago } from "./simular.ts";
+import { carteraDelPortal, COLUMNAS_DE_PAGOS, conciliacionDelDia, corteDelDia, pagosParaExportar, resumenDelPortal, rutaDelGestor } from "./tableros.ts";
 
 export interface Contexto {
   request: Request;
@@ -43,8 +55,33 @@ export interface Contexto {
 }
 
 const FUERA_DE_HORARIO = `Fuera del horario de gestión de cobranza (${HORARIO_GESTION.desde}:00 a ${HORARIO_GESTION.hasta}:00).`;
+const SOLO_ADMIN = "Esta acción es solo para el administrador de la financiera.";
+const SOLO_SIMULACION = "Los pagos simulados solo existen en modo simulación.";
+const CSV_MAXIMO = 300 * 1024;
+const BOLETO_SEG = 60;
+
+function objeto(valor: unknown): Record<string, unknown> | null {
+  return typeof valor === "object" && valor !== null && !Array.isArray(valor) ? (valor as Record<string, unknown>) : null;
+}
+
+/** true si la persona todavía cabe en el límite de uso; si no, la respuesta 429 ya lista. */
+async function dentroDelLimite(c: Pick<Contexto, "request" | "env">, nombre: string, limite: Limite, mensaje: string): Promise<Response | null> {
+  const persona = await huellaIp(c.request, c.env);
+  return (await consumir(c.env.DB, `${nombre}:${persona}`, limite)) ? null : json({ error: mensaje }, 429);
+}
+
+function csv(nombre: string, contenido: string): Response {
+  return new Response(contenido, {
+    headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="${nombre}"`, "cache-control": "no-store" },
+  });
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Sesión y canal en vivo
+// ---------------------------------------------------------------------------------------------------------------
 
 async function sesion({ env, rol }: Contexto): Promise<Response> {
+  const cartera = await env.DB.prepare("SELECT valor FROM ajustes WHERE clave = 'cartera'").first<{ valor: string }>();
   return json({
     rol,
     simulacion: modoSimulacion(env),
@@ -52,16 +89,45 @@ async function sesion({ env, rol }: Contexto): Promise<Response> {
     vigenciaSeg: VIGENCIA_SEG,
     hoy: diaCdmx(),
     financiera: FINANCIERA,
+    carteraDeEjemplo: cartera?.valor !== "importada",
     gestores: await gestores(env.DB),
     horario: { dentro: dentroDeHorario(), desde: HORARIO_GESTION.desde, hasta: HORARIO_GESTION.hasta, estricto: horarioEstricto(env) },
     ...(rol === "admin" ? { configuracion: { pey: Boolean(env.PEY_API_KEY), webhook: Boolean(env.PEY_WEBHOOK_SECRET) } } : {}),
   });
 }
 
+async function boleto({ env, url }: Contexto): Promise<Response> {
+  const canal = url.searchParams.get("canal");
+  if (canal !== "portal" && canal !== "gestor") return json({ error: "Canal desconocido." }, 400);
+  const vence = Math.floor(Date.now() / 1000) + BOLETO_SEG;
+  return json({ boleto: await firmarBoleto(secretoBoletos(env), canal, vence), canal, venceSeg: vence });
+}
+
+/** Abre el canal en vivo del personal. No lleva clave: el boleto firmado es la autorización. */
+export async function abrirCanalDelPersonal(env: Env, url: URL, conectar: (canal: "portal" | "gestor") => Promise<Response>): Promise<Response> {
+  const canal = url.searchParams.get("canal");
+  if (canal !== "portal" && canal !== "gestor") return json({ error: "Canal desconocido." }, 400);
+  const valido = await verificarBoleto(secretoBoletos(env), canal, url.searchParams.get("boleto") ?? "");
+  return valido ? conectar(canal) : json({ error: "Boleto inválido o vencido." }, 401);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// App del gestor
+// ---------------------------------------------------------------------------------------------------------------
+
+async function ruta({ env, url }: Contexto): Promise<Response> {
+  const datos = await rutaDelGestor(env.DB, diaCdmx(), url.searchParams.get("gestor") ?? "");
+  return datos ? json(datos) : json({ error: "No existe ese gestor." }, 404);
+}
+
+async function verCredito({ env, rol }: Contexto, id: string): Promise<Response> {
+  const detalle = esIdCredito(id) ? await detalleDeCredito(env.DB, id, diaCdmx(), rol) : null;
+  return detalle ? json(detalle) : json({ error: "No existe ese crédito." }, 404);
+}
+
 async function nuevoCobro(c: Contexto): Promise<Response> {
   const { request, env, url } = c;
-  const cuerpo = await leerJson(request);
-  const datos = typeof cuerpo === "object" && cuerpo !== null ? (cuerpo as Record<string, unknown>) : null;
+  const datos = objeto(await leerJson(request));
   const creditoId = typeof datos?.creditoId === "string" ? datos.creditoId.trim() : "";
   if (!datos || !esIdCredito(creditoId)) return json({ error: "Falta el número de crédito." }, 400);
 
@@ -75,9 +141,10 @@ async function nuevoCobro(c: Contexto): Promise<Response> {
   if (!solicitud.ok) return json({ error: solicitud.error }, 400);
   if (horarioEstricto(env) && !dentroDeHorario()) return json({ error: FUERA_DE_HORARIO }, 403);
 
-  const persona = await huellaIp(request, env);
-  const cabe = (await consumir(env.DB, `cobro:${persona}`, LIMITES.cobroPorPersona)) && (await consumir(env.DB, "cobro:todos", LIMITES.cobroGlobal));
-  if (!cabe) return json({ error: "Demasiados cobros en poco tiempo. Espera unos minutos." }, 429);
+  const excedido =
+    (await dentroDelLimite(c, "cobro", LIMITES.cobroPorPersona, "Demasiados cobros en poco tiempo. Espera unos minutos.")) ??
+    ((await consumir(env.DB, "cobro:todos", LIMITES.cobroGlobal)) ? null : json({ error: "La demo recibió demasiados cobros. Intenta en unos minutos." }, 429));
+  if (excedido) return excedido;
 
   try {
     const { cobro, reutilizado } = await crearCobro(env, solicitud.valor, fila.gestor_id);
@@ -96,21 +163,171 @@ async function verCobro({ env, rol }: Contexto, id: string): Promise<Response> {
   return json({ cobro: cobroVisible(cobro), recibo: await reciboDelCobro(env.DB, cobro, { rastreoCompleto: rol === "admin" }) });
 }
 
-async function verCredito({ env, rol }: Contexto, id: string): Promise<Response> {
-  const detalle = esIdCredito(id) ? await detalleDeCredito(env.DB, id, diaCdmx(), rol) : null;
-  return detalle ? json(detalle) : json({ error: "No existe ese crédito." }, 404);
+async function nuevaGestion(c: Contexto): Promise<Response> {
+  const { request, env, avisar } = c;
+  const solicitud = validarGestion(await leerJson(request), diaCdmx());
+  if (!solicitud.ok) return json({ error: solicitud.error }, 400);
+  const g = solicitud.valor;
+  const fila = await credito(env.DB, g.creditoId);
+  if (!fila) return json({ error: "No existe ese crédito." }, 404);
+  if (horarioEstricto(env) && !dentroDeHorario()) return json({ error: FUERA_DE_HORARIO }, 403);
+  const excedido = await dentroDelLimite(c, "visita", LIMITES.visitaPorPersona, "Demasiadas visitas registradas en poco tiempo. Espera unos minutos.");
+  if (excedido) return excedido;
+
+  const gestion = { id: generarId("ges"), ...g, gestorId: fila.gestor_id, origen: "app", creadoEn: new Date().toISOString() };
+  await env.DB.prepare(
+    `INSERT INTO gestiones (id, credito_id, gestor_id, resultado, nota, promesa_fecha, promesa_centavos, latitud, longitud, origen, creado_en)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'app', ?)`,
+  )
+    .bind(gestion.id, g.creditoId, fila.gestor_id, g.resultado, g.nota, g.promesaFecha, g.promesaCentavos, g.latitud, g.longitud, gestion.creadoEn)
+    .run();
+  avisar({ tipo: "visita", creditoId: g.creditoId, gestorId: fila.gestor_id, resultado: g.resultado, origen: "app", fecha: gestion.creadoEn });
+  return json({ gestion }, 201);
 }
 
-const SOLO_ADMIN = "Esta acción es solo para el administrador de la financiera.";
+// ---------------------------------------------------------------------------------------------------------------
+// Portal
+// ---------------------------------------------------------------------------------------------------------------
+
+async function recuperar(c: Contexto): Promise<Response> {
+  const { request, env, avisar } = c;
+  const datos = objeto(await leerJson(request));
+  const transactionId = typeof datos?.transactionId === "string" ? datos.transactionId.trim() : "";
+  if (!/^[\w:.-]{4,64}$/.test(transactionId)) return json({ error: "Falta la transacción por recuperar." }, 400);
+  const excedido = (await consumir(env.DB, "cuadre:todos", LIMITES.cuadreGlobal)) ? null : json({ error: "Demasiadas consultas a pey. Espera unos minutos." }, 429);
+  if (excedido) return excedido;
+
+  let transaccion: Awaited<ReturnType<typeof consultarTransaccion>>;
+  try {
+    transaccion = await consultarTransaccion(env, transactionId);
+  } catch (error) {
+    if (!(error instanceof ErrorPey) && !(error instanceof DOMException)) throw error;
+    return json({ error: mensajeDePey(error) }, 502);
+  }
+  const pago = transaccion ? normalizarPago(`recuperado:${transactionId}`, transaccion.aviso) : null;
+  if (!pago) return json({ error: "pey no tiene un pago CoDi con esa transacción." }, 404);
+
+  const conciliado = await conciliarPago(env.DB, pago, { origen: modoSimulacion(env) ? "simulado" : "codi", recuperado: true });
+  if (conciliado.nuevo) {
+    log("pago_recuperado", { transactionId, credito: conciliado.creditoId, estado: conciliado.estado });
+    avisar({ tipo: "pago", pago: conciliado });
+  }
+  return json({ ok: true, duplicado: !conciliado.nuevo, estado: conciliado.estado, motivo: conciliado.motivo, creditoId: conciliado.creditoId });
+}
+
+async function resolver({ request, env }: Contexto, transactionId: string): Promise<Response> {
+  const datos = objeto(await leerJson(request));
+  const creditoId = typeof datos?.creditoId === "string" ? datos.creditoId.trim() : "";
+  if (!esIdCredito(creditoId)) return json({ error: "Elige el crédito al que se aplica el pago." }, 400);
+  const r = await resolverExcepcion(env.DB, transactionId, creditoId);
+  if (!r.ok) return json({ error: r.error }, r.status);
+  log("excepcion_resuelta", { transactionId, credito: creditoId, aplicadoCentavos: r.aplicadoCentavos, pendienteCentavos: r.pendienteCentavos });
+  return json(r);
+}
+
+/** Convierte los créditos de un archivo en lo que se carga: un gestor por nombre y el orden de su ruta. */
+function prepararCartera(creditos: ReturnType<typeof validarCartera>["creditos"]) {
+  const idDeGestor = new Map<string, string>();
+  const orden = new Map<string, number>();
+  const porCargar: CreditoPorCargar[] = creditos.map((c) => {
+    if (!idDeGestor.has(c.gestor)) idDeGestor.set(c.gestor, `g${idDeGestor.size + 1}`);
+    const gestorId = idDeGestor.get(c.gestor) as string;
+    orden.set(gestorId, (orden.get(gestorId) ?? 0) + 1);
+    return { ...c, gestorId, orden: orden.get(gestorId) as number, demo: false };
+  });
+  const listaGestores = [...idDeGestor].map(([nombre, id]) => ({ id, nombre, zona: "" }));
+  return { porCargar, listaGestores };
+}
+
+async function cartera(c: Contexto, accion: "validar" | "importar"): Promise<Response> {
+  const { request, env, rol } = c;
+  if (accion === "importar" && rol !== "admin") return json({ error: SOLO_ADMIN }, 403);
+  const excedido = await dentroDelLimite(c, "archivo", LIMITES.archivoPorPersona, "Demasiados archivos en poco tiempo. Espera unos minutos.");
+  if (excedido) return excedido;
+  const texto = await leerTextoLimitado(request, CSV_MAXIMO);
+  if (texto === null) return json({ error: "El archivo pesa más de 300 KB." }, 413);
+
+  const resultado = validarCartera(texto, diaCdmx());
+  const respuesta = {
+    ok: resultado.ok,
+    columnasFaltantes: resultado.columnasFaltantes,
+    errores: resultado.errores.slice(0, 50),
+    erroresTotales: resultado.errores.length,
+    resumen: resultado.resumen,
+    vistaPrevia: resultado.creditos.slice(0, 8),
+  };
+  if (accion === "validar") return json(respuesta);
+  if (!resultado.ok) return json({ ...respuesta, error: "El archivo tiene errores. Corrígelos y vuelve a subirlo." }, 400);
+
+  const { porCargar, listaGestores } = prepararCartera(resultado.creditos);
+  await env.DB.batch([
+    ...sentenciasDeCartera(env.DB, listaGestores, porCargar, new Date().toISOString()),
+    env.DB.prepare("DELETE FROM historico"),
+    env.DB.prepare("INSERT INTO ajustes (clave, valor) VALUES ('cartera', 'importada') ON CONFLICT (clave) DO UPDATE SET valor = excluded.valor"),
+  ]);
+  log("cartera_importada", { creditos: porCargar.length, gestores: listaGestores.length });
+  return json({ ok: true, creditos: porCargar.length, gestores: listaGestores.length });
+}
+
+async function qrFijo({ env, rol }: Contexto, creditoId: string): Promise<Response> {
+  if (rol !== "admin") return json({ error: SOLO_ADMIN }, 403);
+  const fila = esIdCredito(creditoId) ? await credito(env.DB, creditoId) : null;
+  if (!fila) return json({ error: "No existe ese crédito." }, 404);
+  const actual = estadoCredito(await cuotasDe(env.DB, creditoId), diaCdmx()).cuotaActual;
+  if (!actual) return json({ error: "Ese crédito ya está liquidado." }, 409);
+  // El QR fijo lleva el monto de la cuota; en la demo pública, sin pasar del tope.
+  const tope = topeDemo(env);
+  const monto = tope > 0 ? Math.min(actual.montoCentavos, tope) : actual.montoCentavos;
+  try {
+    const fijo = await asegurarQrFijo(env, creditoId, monto);
+    if (!fijo?.qr_string) return json({ error: "El QR se está creando. Intenta en unos segundos." }, 409);
+    return json({ qrFijo: { qrString: fijo.qr_string, montoCentavos: fijo.monto_centavos, simulado: fijo.simulado === 1 } });
+  } catch (error) {
+    if (!(error instanceof ErrorPey) && !(error instanceof DOMException)) throw error;
+    return json({ error: mensajeDePey(error) }, 502);
+  }
+}
+
+async function simular(c: Contexto): Promise<Response> {
+  const { request, env, url, avisar } = c;
+  if (!modoSimulacion(env)) return json({ error: SOLO_SIMULACION }, 404);
+  const datos = objeto(await leerJson(request));
+  if (!datos) return json({ error: "Faltan los datos del pago simulado." }, 400);
+  const excedido = await dentroDelLimite(c, "simulacion", LIMITES.simulacionPorPersona, "Demasiados pagos simulados en poco tiempo. Espera unos minutos.");
+  if (excedido) return excedido;
+
+  if (datos.tipo === "sin-referencia") {
+    const monto = datos.montoCentavos;
+    if (typeof monto !== "number" || !Number.isInteger(monto) || monto <= 0 || monto > 10_000_000) return json({ error: "El monto debe ser mayor que cero." }, 400);
+    return simularPago(env, url, { tipo: "qr", peyId: null, folio: null, cobroId: null, creditoId: null, montoCentavos: monto }, { conAviso: true }, avisar);
+  }
+  if (datos.tipo === "cobro" && typeof datos.cobroId === "string") {
+    const cobro = await cobroPorId(env.DB, datos.cobroId);
+    if (!cobro) return json({ error: "No existe ese cobro." }, 404);
+    if (estadoDelCobro(cobro) === "vencido") return json({ error: "Ese cobro ya venció. Crea uno nuevo." }, 409);
+    return simularPago(
+      env,
+      url,
+      { tipo: cobro.medio === "push" ? "pn" : "qr", peyId: cobro.pey_id, folio: cobro.folio, cobroId: cobro.id, creditoId: cobro.credito_id, montoCentavos: cobro.monto_centavos },
+      { conAviso: datos.conAviso !== false },
+      avisar,
+    );
+  }
+  return json({ error: "No se reconoce el tipo de pago simulado." }, 400);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Rutas
+// ---------------------------------------------------------------------------------------------------------------
 
 export async function manejarApp(request: Request, env: Env, url: URL, avisar: Avisador): Promise<Response> {
   const rol = await rolDe(request, env);
   if (!rol) return json({ error: "Clave incorrecta." }, 401);
   const c: Contexto = { request, env, url, rol, avisar };
   const metodo = request.method;
-  const ruta = url.pathname.slice("/api/app".length);
+  const ruta_ = url.pathname.slice("/api/app".length);
 
-  if (metodo === "POST" && ruta === "/reiniciar") {
+  if (metodo === "POST" && ruta_ === "/reiniciar") {
     if (rol !== "admin") return json({ error: SOLO_ADMIN }, 403);
     await reiniciarDemo(env, avisar);
     return json({ ok: true });
@@ -119,13 +336,49 @@ export async function manejarApp(request: Request, env: Env, url: URL, avisar: A
   // Antes de leer: nuevo día y lo que ya hicieron los otros gestores de la cartera de ejemplo.
   await ponerAlDia(env, avisar);
 
-  if (metodo === "GET" && ruta === "/sesion") return sesion(c);
-  if (metodo === "POST" && ruta === "/cobros") return nuevoCobro(c);
+  if (metodo === "GET") {
+    if (ruta_ === "/sesion") return sesion(c);
+    if (ruta_ === "/boleto") return boleto(c);
+    if (ruta_ === "/ruta") return ruta(c);
+    if (ruta_ === "/resumen") return json(await resumenDelPortal(env.DB, diaCdmx(), rol));
+    if (ruta_ === "/cartera") {
+      const p = url.searchParams;
+      return json(await carteraDelPortal(env.DB, diaCdmx(), { buscar: (p.get("buscar") ?? "").slice(0, 60), situacion: p.get("situacion") ?? "", pagina: paginaPedida(p.get("pagina")) }));
+    }
+    if (ruta_ === "/conciliacion") {
+      return json(await conciliacionDelDia(env.DB, rol, { estado: url.searchParams.get("estado") ?? "", pagina: paginaPedida(url.searchParams.get("pagina")) }));
+    }
+    if (ruta_ === "/corte") {
+      const conPey = url.searchParams.get("pey") === "1";
+      if (conPey && !(await consumir(env.DB, "cuadre:todos", LIMITES.cuadreGlobal))) return json({ error: "Demasiadas consultas a pey. Espera unos minutos." }, 429);
+      try {
+        return json(await corteDelDia(env, diaCdmx(), { conPey, simulado: modoSimulacion(env) }));
+      } catch (error) {
+        if (!(error instanceof ErrorPey) && !(error instanceof DOMException)) throw error;
+        return json({ error: mensajeDePey(error) }, 502);
+      }
+    }
+    if (ruta_ === "/pagos.csv") return csv(`qadra-pagos-${diaCdmx()}.csv`, aCsv(COLUMNAS_DE_PAGOS, await pagosParaExportar(env.DB, rol)));
+    if (ruta_ === "/cartera/plantilla.csv") return csv("qadra-plantilla-cartera.csv", "﻿" + PLANTILLA_CARTERA);
+  }
 
-  let m = /^\/cobros\/(cob_[0-9a-f]{12})$/.exec(ruta);
+  if (metodo === "POST") {
+    if (ruta_ === "/cobros") return nuevoCobro(c);
+    if (ruta_ === "/gestiones") return nuevaGestion(c);
+    if (ruta_ === "/corte/recuperar") return recuperar(c);
+    if (ruta_ === "/cartera/validar") return cartera(c, "validar");
+    if (ruta_ === "/cartera/importar") return cartera(c, "importar");
+    if (ruta_ === "/simular") return simular(c);
+  }
+
+  let m = /^\/cobros\/(cob_[0-9a-f]{12})$/.exec(ruta_);
   if (m && metodo === "GET") return verCobro(c, m[1]);
-  m = /^\/creditos\/([^/]{1,40})$/.exec(ruta);
+  m = /^\/creditos\/([^/]{1,40})\/qr-fijo$/.exec(ruta_);
+  if (m && metodo === "POST") return qrFijo(c, decodeURIComponent(m[1]));
+  m = /^\/creditos\/([^/]{1,40})$/.exec(ruta_);
   if (m && metodo === "GET") return verCredito(c, decodeURIComponent(m[1]));
+  m = /^\/excepciones\/([\w:.-]{4,64})\/resolver$/.exec(ruta_);
+  if (m && metodo === "POST") return resolver(c, m[1]);
 
   return json({ error: "No encontrado" }, 404);
 }

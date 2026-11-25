@@ -1,10 +1,10 @@
 // Consultas de lectura para la app del gestor y el portal. Todo lo que sale de aquí ya va listo para mostrarse:
 // en camelCase y con los datos sensibles recortados según el rol.
 
+import { estadoCredito } from "../core/conciliacion.ts";
 import { enmascararRastreo, enmascararTelefono } from "../core/validaciones.ts";
 import { credito, cuotasDe } from "./db.ts";
 import type { Rol } from "./entorno.ts";
-import { estadoCredito } from "../core/conciliacion.ts";
 
 export interface FilaPago {
   transaction_id: string;
@@ -29,7 +29,7 @@ export interface FilaPago {
   resuelto_en: string | null;
 }
 
-interface FilaAplicacion {
+export interface FilaAplicacion {
   transaction_id: string;
   cuota_numero: number;
   monto_centavos: number;
