@@ -1,0 +1,17 @@
+{
+  "name": "Qadra · App del gestor",
+  "short_name": "Qadra",
+  "description": "Ruta del día y cobro con CoDi para gestores de campo.",
+  "lang": "es-MX",
+  "start_url": "/gestor/",
+  "scope": "/gestor/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0E1A33",
+  "theme_color": "#0E1A33",
+  "icons": [
+    { "src": "/marca/icono-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/marca/icono-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/marca/icono.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

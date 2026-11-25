@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es-MX">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Qadra · App del gestor</title>
+    <meta name="description" content="App del gestor de campo: ruta del día, cobro con CoDi y confirmación del pago en segundos." />
+    <meta name="theme-color" content="#0E1A33" />
+    <meta name="robots" content="noindex" />
+    <link rel="manifest" href="/gestor/manifest.webmanifest" />
+    <link rel="icon" href="/marca/icono.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/marca/icono-192.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@700;800&display=swap"
+    />
+    <link rel="stylesheet" href="/estilos.css" />
+    <link rel="stylesheet" href="/gestor/gestor.css" />
+  </head>
+  <body class="gestor">
+    <div class="escenario trama">
+      <aside class="lado" aria-label="Acerca de esta demo">
+        <a class="marca" href="/" id="lado-marca"></a>
+        <h1>La app del gestor de campo</h1>
+        <p>Ruta del día, cobro con CoDi y el pago confirmado en segundos. El gestor no carga efectivo y el dinero cae directo en la cuenta de la financiera.</p>
+        <ol class="lado-pasos">
+          <li>Abre un crédito de la ruta.</li>
+          <li>Toca <b>Cobrar con CoDi</b> y elige QR o cobro al celular.</li>
+          <li>Paga desde la app de tu banco y mira cómo cambia a <b>Pagado</b>.</li>
+        </ol>
+        <div class="lado-qr">
+          <div class="qr" id="lado-qr"></div>
+          <p><b>Ábrela en tu celular</b><br />Escanea el código con la cámara para usarla como la usaría un gestor.</p>
+        </div>
+        <p class="lado-enlaces"><a href="/portal/">Ver el portal de la financiera</a> · <a href="/">Volver al inicio</a></p>
+      </aside>
+      <main id="app" class="telefono" aria-live="polite">
+        <p class="cargando">Cargando…</p>
+      </main>
+    </div>
+    <noscript><p style="padding: 24px; color: #fff">La app del gestor necesita JavaScript.</p></noscript>
+    <script src="/vendor/qrcode-1.4.4.js"></script>
+    <script type="module" src="/gestor/gestor.js"></script>
+  </body>
+</html>
