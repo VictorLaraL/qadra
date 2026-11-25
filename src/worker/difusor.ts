@@ -21,6 +21,15 @@ export function esCanal(valor: string | null): valor is Canal {
   return valor !== null && CANAL_VALIDO.test(valor);
 }
 
+// Los canales públicos no piden clave, así que llevan tope de conexiones: nadie puede llenar el objeto que también
+// atiende al personal. Una página de pago la abren el acreditado y, si acaso, el gestor.
+const CONEXIONES_MAXIMAS = { demo: 300, cobro: 8, personal: 200 } as const;
+
+export function topeDeConexiones(canal: Canal): number {
+  if (canal === "demo") return CONEXIONES_MAXIMAS.demo;
+  return canal.startsWith("cobro:") ? CONEXIONES_MAXIMAS.cobro : CONEXIONES_MAXIMAS.personal;
+}
+
 export class Difusor extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -33,6 +42,9 @@ export class Difusor extends DurableObject<Env> {
     const canal = request.headers.get("x-canal");
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket" || !esCanal(canal)) {
       return new Response("Se espera un WebSocket", { status: 426 });
+    }
+    if (this.ctx.getWebSockets(canal).length >= topeDeConexiones(canal)) {
+      return new Response("Demasiadas conexiones en este canal", { status: 503 });
     }
     const par = new WebSocketPair();
     const [cliente, servidor] = Object.values(par);

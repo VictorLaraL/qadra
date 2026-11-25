@@ -57,6 +57,9 @@ export const COLUMNAS_OBLIGATORIAS = [
 
 export const MAXIMO_CREDITOS = 500;
 
+/** Marca de orden de bytes (U+FEFF). Excel la necesita al inicio de un CSV para leer bien los acentos. */
+export const BOM = String.fromCharCode(0xfeff);
+
 /** Archivo de ejemplo que se puede descargar, llenar en Excel y volver a subir. */
 export const PLANTILLA_CARTERA =
   "id_credito,acreditado,telefono,producto,grupo,colonia,domicilio,gestor,monto_cuota,cuotas_totales,cuotas_pagadas,frecuencia,proximo_vencimiento\r\n" +
@@ -75,7 +78,7 @@ export interface FilaCsv {
  * Omite los renglones vacíos.
  */
 export function leerCsvConRenglones(texto: string): FilaCsv[] {
-  const limpio = texto.replace(/^﻿/, "");
+  const limpio = texto.startsWith(BOM) ? texto.slice(1) : texto;
   const encabezado = limpio.split(/\r?\n/, 1)[0] ?? "";
   const cuenta = (s: string) => encabezado.split(s).length;
   const separador = cuenta(";") > cuenta(",") && cuenta(";") >= cuenta("\t") ? ";" : cuenta("\t") > cuenta(",") ? "\t" : ",";
@@ -124,7 +127,7 @@ export function leerCsv(texto: string): string[][] {
 function nombreColumna(encabezado: string): string {
   return encabezado
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/\p{M}/gu, "")
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
@@ -201,8 +204,10 @@ export function validarCartera(texto: string, hoy: string): ResultadoCartera {
 
     const acreditado = textoEntre("acreditado", 2, 60);
 
-    const telefono = valor("telefono") === "" ? null : limpiarCelular(valor("telefono"));
-    if (valor("telefono") !== "" && telefono === null) error("telefono", "El celular debe tener 10 dígitos, o dejarse vacío.");
+    // Vacío, o solo guiones y espacios (como se marca "sin celular" en Excel), es un crédito sin celular.
+    const sinTelefono = valor("telefono").replace(/[\s-]/g, "") === "";
+    const telefono = sinTelefono ? null : limpiarCelular(valor("telefono"));
+    if (!sinTelefono && telefono === null) error("telefono", "El celular debe tener 10 dígitos, o dejarse vacío.");
 
     const producto = textoEntre("producto", 1, 40);
     const grupo = textoEntre("grupo", 1, 40, false);
@@ -290,5 +295,5 @@ export function aCsv(encabezados: string[], filas: Array<Array<string | number |
     const seguro = /^[=+\-@]/.test(valor) ? `'${valor}` : valor;
     return /[",\r\n]/.test(seguro) ? `"${seguro.replaceAll('"', '""')}"` : seguro;
   };
-  return "﻿" + [encabezados, ...filas].map((fila) => fila.map(celda).join(",") + "\r\n").join("");
+  return BOM + [encabezados, ...filas].map((fila) => fila.map(celda).join(",") + "\r\n").join("");
 }

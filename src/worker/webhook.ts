@@ -10,7 +10,7 @@ import { esEventoDePago, normalizarPago } from "../core/pagos.ts";
 import { conciliarPago } from "./conciliar.ts";
 import { modoSimulacion, secretoAvisos } from "./entorno.ts";
 import type { Avisador } from "./eventos.ts";
-import { json, log } from "./http.ts";
+import { json, leerTextoLimitado, log } from "./http.ts";
 
 const TAMANO_MAXIMO = 64 * 1024;
 
@@ -18,10 +18,9 @@ export async function manejarAviso(request: Request, env: Env, avisar: Avisador)
   const secreto = secretoAvisos(env);
   if (!secreto) return json({ ok: false, error: "Falta configurar PEY_WEBHOOK_SECRET" }, 503);
 
-  const largo = Number(request.headers.get("content-length") ?? 0);
-  if (largo > TAMANO_MAXIMO) return json({ ok: false, error: "Aviso demasiado grande" }, 413);
-  const cuerpo = await request.text();
-  if (cuerpo.length > TAMANO_MAXIMO) return json({ ok: false, error: "Aviso demasiado grande" }, 413);
+  // Esta ruta no pide clave y la firma se revisa después de leer: el cuerpo se lee con tope, venga o no Content-Length.
+  const cuerpo = await leerTextoLimitado(request, TAMANO_MAXIMO);
+  if (cuerpo === null) return json({ ok: false, error: "Aviso demasiado grande" }, 413);
 
   const encabezados = {
     "webhook-id": request.headers.get("webhook-id") ?? "",

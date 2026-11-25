@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aCsv, generarCuotas, leerCsv, PLANTILLA_CARTERA, validarCartera } from "../src/core/cartera.ts";
+import { aCsv, BOM, generarCuotas, leerCsv, PLANTILLA_CARTERA, validarCartera } from "../src/core/cartera.ts";
 import { validarCobro } from "../src/core/validaciones.ts";
 
 const HOY = "2026-11-25";
@@ -17,7 +17,7 @@ test("leerCsv separa por comas y respeta comillas, comas internas y comillas dob
 });
 
 test("leerCsv quita la marca BOM, acepta saltos de línea de Windows y dentro de comillas, y omite renglones vacíos", () => {
-  const filas = leerCsv('﻿a,b\r\n1,"dos\nrenglones"\r\n\r\n2,3\n\n');
+  const filas = leerCsv(BOM + 'a,b\r\n1,"dos\nrenglones"\r\n\r\n2,3\n\n');
   assert.deepEqual(filas, [
     ["a", "b"],
     ["1", "dos\nrenglones"],
@@ -144,6 +144,13 @@ test("la regla del número de crédito y del celular es la misma al importar y a
   assert.equal(conCelular.creditos[0]?.telefono, "9991234567");
 });
 
+test("un guion o espacios en la columna del celular significan 'sin celular', como se acostumbra en Excel", () => {
+  for (const vacio of ["-", " - ", "--", ""]) {
+    const r = validarCartera([ENCABEZADO, FILA.replace("9991234567", vacio)].join("\n"), HOY);
+    assert.deepEqual([r.ok, r.creditos[0]?.telefono], [true, null], `con ${JSON.stringify(vacio)}`);
+  }
+});
+
 test("un archivo vacío, sin renglones de datos o con más de 500 créditos se rechaza con un mensaje claro", () => {
   assert.match(validarCartera("", HOY).errores[0].mensaje, /vacío/i);
   assert.match(validarCartera(ENCABEZADO, HOY).errores[0].mensaje, /no tiene créditos/i);
@@ -203,6 +210,6 @@ test("aCsv entrecomilla lo necesario, desactiva fórmulas y abre bien en Excel",
       ["B2", "=HYPERLINK(1)", null],
     ],
   );
-  assert.equal(csv, '﻿credito,nota,monto\r\n004512,"Dijo ""sí"", mañana",450.5\r\nB2,\'=HYPERLINK(1),\r\n');
+  assert.equal(csv, BOM + 'credito,nota,monto\r\n004512,"Dijo ""sí"", mañana",450.5\r\nB2,\'=HYPERLINK(1),\r\n');
   assert.deepEqual(leerCsv(csv)[1], ["004512", 'Dijo "sí", mañana', "450.5"]);
 });

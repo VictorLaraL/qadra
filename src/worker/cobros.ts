@@ -5,7 +5,7 @@ import { pesos } from "../core/dinero.ts";
 import { generarFolio, generarId, generarToken } from "../core/tokens.ts";
 import { enmascararRastreo, type SolicitudCobro } from "../core/validaciones.ts";
 import type { FilaCobro } from "./conciliar.ts";
-import { crearQr, enviarPush } from "./pey.ts";
+import { crearQr, enviarPush, ErrorPey } from "./pey.ts";
 
 /** Vigencia de un cobro, en segundos. pey exige al menos 360. */
 export const VIGENCIA_SEG = 600;
@@ -93,69 +93,80 @@ async function folioLibre(db: D1Database): Promise<number> {
   throw new Error("No se pudo asignar un folio al cobro");
 }
 
+/** true si pey dijo con certeza que NO creó el cobro (lo rechazó, o ni siquiera se le llamó). */
+function peyNoLoCreo(error: unknown): boolean {
+  return error instanceof ErrorPey && (error.status < 500 || error.tipo === "SIN_CONFIGURAR");
+}
+
 /**
  * Crea un cobro en pey y lo guarda. Un QR pendiente por el mismo crédito y monto se reutiliza mientras siga vigente.
- * Lanza ErrorPey si pey no lo acepta.
+ *
+ * El cobro se guarda ANTES de llamar a pey, con su id y su folio. Si pey lo crea pero su respuesta se pierde (por
+ * ejemplo, se agota el tiempo de espera), el renglón sigue ahí: cuando el acreditado pague, el aviso trae ese folio
+ * como numRef y ese id en la metadata, y el pago se concilia en lugar de quedar sin identificar.
+ * Lanza ErrorPey (o el error de red) si pey no responde bien.
  */
 export async function crearCobro(env: Env, solicitud: SolicitudCobro, gestorId: string | null, ahora = new Date()): Promise<{ cobro: FilaCobro; reutilizado: boolean }> {
   if (solicitud.medio === "qr") {
     const vigente = await env.DB.prepare(
-      `SELECT * FROM cobros WHERE credito_id = ? AND monto_centavos = ? AND medio = 'qr' AND estado = 'pendiente' AND vence_en > ?
-       ORDER BY creado_en DESC LIMIT 1`,
+      `SELECT * FROM cobros WHERE credito_id = ? AND monto_centavos = ? AND medio = 'qr' AND estado = 'pendiente' AND qr_string IS NOT NULL
+         AND vence_en > ? ORDER BY creado_en DESC LIMIT 1`,
     )
       .bind(solicitud.creditoId, solicitud.montoCentavos, new Date(ahora.getTime() + MARGEN_REUSO_MS).toISOString())
       .first<FilaCobro>();
     if (vigente) return { cobro: vigente, reutilizado: true };
   }
 
-  const id = generarId("cob");
-  const folio = await folioLibre(env.DB);
-  const datos = {
-    montoCentavos: solicitud.montoCentavos,
-    concepto: concepto(solicitud.creditoId),
-    expiracionSeg: VIGENCIA_SEG,
-    folio,
-    metadata: { cobro: id, credito: solicitud.creditoId },
-  };
-
-  let peyId: string;
-  let qrString: string | null = null;
-  let simulado: boolean;
-  if (solicitud.medio === "push") {
-    const push = await enviarPush(env, { ...datos, telefono: solicitud.telefono as string });
-    peyId = push.transactionId;
-    simulado = push.simulado;
-  } else {
-    const qr = await crearQr(env, datos);
-    peyId = qr.id;
-    qrString = qr.qrString;
-    simulado = qr.simulado;
-  }
-
   const cobro: FilaCobro = {
-    id,
-    folio,
+    id: generarId("cob"),
+    folio: await folioLibre(env.DB),
     token: generarToken(),
     credito_id: solicitud.creditoId,
     monto_centavos: solicitud.montoCentavos,
     medio: solicitud.medio,
     estado: "pendiente",
-    pey_id: peyId,
-    qr_string: qrString,
+    pey_id: null,
+    qr_string: null,
     telefono_fin: solicitud.telefono ? solicitud.telefono.slice(-4) : null,
     gestor_id: gestorId,
-    simulado: simulado ? 1 : 0,
+    simulado: 0,
     creado_en: ahora.toISOString(),
     vence_en: new Date(ahora.getTime() + VIGENCIA_SEG * 1000).toISOString(),
     pagado_en: null,
     transaction_id: null,
   };
   await env.DB.prepare(
-    `INSERT INTO cobros (id, folio, token, credito_id, monto_centavos, medio, estado, pey_id, qr_string, telefono_fin, gestor_id, simulado, creado_en, vence_en)
-     VALUES (?, ?, ?, ?, ?, ?, 'pendiente', ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO cobros (id, folio, token, credito_id, monto_centavos, medio, estado, telefono_fin, gestor_id, simulado, creado_en, vence_en)
+     VALUES (?, ?, ?, ?, ?, ?, 'pendiente', ?, ?, 0, ?, ?)`,
   )
-    .bind(cobro.id, cobro.folio, cobro.token, cobro.credito_id, cobro.monto_centavos, cobro.medio, cobro.pey_id, cobro.qr_string, cobro.telefono_fin, cobro.gestor_id, cobro.simulado, cobro.creado_en, cobro.vence_en)
+    .bind(cobro.id, cobro.folio, cobro.token, cobro.credito_id, cobro.monto_centavos, cobro.medio, cobro.telefono_fin, cobro.gestor_id, cobro.creado_en, cobro.vence_en)
     .run();
+
+  const datos = {
+    montoCentavos: cobro.monto_centavos,
+    concepto: concepto(cobro.credito_id),
+    expiracionSeg: VIGENCIA_SEG,
+    folio: cobro.folio,
+    metadata: { cobro: cobro.id, credito: cobro.credito_id },
+  };
+  try {
+    if (solicitud.medio === "push") {
+      const push = await enviarPush(env, { ...datos, telefono: solicitud.telefono as string });
+      cobro.pey_id = push.transactionId;
+      cobro.simulado = push.simulado ? 1 : 0;
+    } else {
+      const qr = await crearQr(env, datos);
+      cobro.pey_id = qr.id;
+      cobro.qr_string = qr.qrString;
+      cobro.simulado = qr.simulado ? 1 : 0;
+    }
+  } catch (error) {
+    // Si pey lo rechazó, el cobro no existe: se borra. Si no se sabe (sin respuesta o error de pey), se conserva.
+    if (peyNoLoCreo(error)) await env.DB.prepare("DELETE FROM cobros WHERE id = ? AND estado = 'pendiente'").bind(cobro.id).run();
+    throw error;
+  }
+
+  await env.DB.prepare("UPDATE cobros SET pey_id = ?, qr_string = ?, simulado = ? WHERE id = ?").bind(cobro.pey_id, cobro.qr_string, cobro.simulado, cobro.id).run();
   return { cobro, reutilizado: false };
 }
 

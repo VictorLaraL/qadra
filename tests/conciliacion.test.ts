@@ -130,6 +130,14 @@ test("cuadre con pey: un pago registrado dos veces nunca cuadra, aunque exista e
   assert.deepEqual([r.qadra.totalCentavos, r.pey.totalCentavos], [200, 100]);
 });
 
+test("cuadre con pey: un pago repetido del lado de pey tampoco cuadra, y cada repetido se lista una sola vez", () => {
+  const uno = { transactionId: "TX1", montoCentavos: 100 };
+  const soloEnPey = compararConPey([uno], [uno, uno]);
+  assert.deepEqual([soloEnPey.cuadra, soloEnPey.repetidos], [false, ["TX1"]]);
+  const enAmbos = compararConPey([uno, uno, uno], [uno, uno]);
+  assert.deepEqual([enAmbos.cuadra, enAmbos.repetidos], [false, ["TX1"]]);
+});
+
 test("cuadre con pey: señala el pago que pey cobró y Qadra no registró (aviso perdido)", () => {
   const r = compararConPey([{ transactionId: "TX1", montoCentavos: 1 }], [
     { transactionId: "TX1", montoCentavos: 1 },

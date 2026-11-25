@@ -30,6 +30,12 @@ export function inicioDelDiaCdmx(fecha = new Date()): string {
   return instanteCdmx(diaCdmx(fecha), 0);
 }
 
+/** Día y hora del reloj de la Ciudad de México de un instante ISO: { dia: "2026-11-25", hora: "10:42:07" }. */
+export function relojCdmx(instante: string): { dia: string; hora: string } {
+  const local = new Date(Date.parse(instante) - DESFASE_MS).toISOString();
+  return { dia: local.slice(0, 10), hora: local.slice(11, 19) };
+}
+
 /** true solo para una fecha real con formato AAAA-MM-DD. */
 export function esDia(valor: unknown): valor is string {
   if (typeof valor !== "string" || !FORMATO_DIA.test(valor)) return false;

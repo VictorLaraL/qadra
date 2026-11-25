@@ -6,11 +6,15 @@
 
 import { firmarAviso } from "../core/firma.ts";
 import { generarId } from "../core/tokens.ts";
+import type { FilaCobro } from "./conciliar.ts";
 import { secretoAvisos } from "./entorno.ts";
 import type { Avisador } from "./eventos.ts";
 import { json } from "./http.ts";
+import { LIMITES, limitePorPersona } from "./limites.ts";
 import { avisoSimulado } from "./pey.ts";
 import { manejarAviso } from "./webhook.ts";
+
+export const SOLO_SIMULACION = "Los pagos simulados solo existen en modo simulación.";
 
 // Claves de Banxico de bancos conocidos, para que el banco de origen del pago simulado varíe.
 const BANCOS = [40012, 40072, 40127, 40014, 40002, 90638, 90722];
@@ -25,9 +29,26 @@ export interface PagoPorSimular {
   montoCentavos: number;
 }
 
+/** El pago que corresponde a un cobro: mismo medio, misma referencia y mismo monto. */
+export function pagoDelCobro(cobro: FilaCobro): PagoPorSimular {
+  return {
+    tipo: cobro.medio === "push" ? "pn" : "qr",
+    peyId: cobro.pey_id,
+    folio: cobro.folio,
+    cobroId: cobro.id,
+    creditoId: cobro.credito_id,
+    montoCentavos: cobro.monto_centavos,
+  };
+}
+
+/** null si la persona puede simular otro pago; si no, la respuesta 429 ya lista. */
+export function limiteDeSimulacion(request: Request, env: Env): Promise<Response | null> {
+  return limitePorPersona(request, env, "simulacion", LIMITES.simulacionPorPersona, "Demasiados pagos simulados en poco tiempo. Espera unos minutos.");
+}
+
 /**
  * Simula que alguien pagó desde su banco.
- * @param avisar false = pey cobró pero el aviso "se perdió" (queda solo en el libro simulado de pey).
+ * @param opciones.conAviso false = pey cobró pero el aviso "se perdió" (queda solo en el libro simulado de pey).
  */
 export async function simularPago(env: Env, origen: URL, p: PagoPorSimular, opciones: { conAviso: boolean }, avisar: Avisador): Promise<Response> {
   const ahoraSeg = Math.floor(Date.now() / 1000);

@@ -14,26 +14,31 @@ import { enmascararRastreo } from "../core/validaciones.ts";
 import { asegurarQrFijo, cobroPorToken, estadoDelCobro, reciboDelCobro, type FilaQrFijo } from "./cobros.ts";
 import { credito, cuotasDe } from "./db.ts";
 import type { Canal } from "./difusor.ts";
-import { huellaIp, modoSimulacion } from "./entorno.ts";
+import { modoSimulacion } from "./entorno.ts";
 import type { Avisador } from "./eventos.ts";
 import { json, log } from "./http.ts";
-import { consumir, LIMITES } from "./limites.ts";
 import { ErrorPey } from "./pey.ts";
 import { ponerAlDia } from "./semilla.ts";
-import { simularPago } from "./simular.ts";
+import { limiteDeSimulacion, pagoDelCobro, simularPago, SOLO_SIMULACION } from "./simular.ts";
 
 /** Monto del QR fijo de la demo pública: un centavo, para que cualquiera lo pruebe con su banco. */
 const MONTO_DEMO_CENTAVOS = 1;
 const TOKEN_DE_COBRO = /^[A-Za-z0-9_-]{32}$/;
-const SOLO_SIMULACION = "Los pagos simulados solo existen en modo simulación.";
+
+// Esta ruta no pide clave. Si crear el QR en pey falla, no se vuelve a intentar con cada visita: se espera un minuto.
+const PAUSA_TRAS_FALLO_MS = 60_000;
+let ultimoFallo = { cuando: 0, mensaje: "" };
 
 async function qrDeLaDemo(env: Env): Promise<{ fijo: FilaQrFijo | null; error: string | null }> {
+  if (Date.now() - ultimoFallo.cuando < PAUSA_TRAS_FALLO_MS) return { fijo: null, error: ultimoFallo.mensaje };
   try {
     return { fijo: await asegurarQrFijo(env, CREDITO_DEMO, MONTO_DEMO_CENTAVOS), error: null };
   } catch (error) {
     // Sin API key (y sin simulación) o con pey caído: la landing lo dice en lugar de romperse.
     log("demo_sin_qr", { mensaje: error instanceof Error ? error.message : String(error) });
-    return { fijo: null, error: error instanceof ErrorPey && error.tipo === "SIN_CONFIGURAR" ? "La demo aún no tiene configurada su cuenta de pey." : "No se pudo preparar el QR de la demo. Intenta en unos minutos." };
+    const sinCuenta = error instanceof ErrorPey && error.tipo === "SIN_CONFIGURAR";
+    ultimoFallo = { cuando: Date.now(), mensaje: sinCuenta ? "La demo aún no tiene configurada su cuenta de pey." : "No se pudo preparar el QR de la demo. Intenta en unos minutos." };
+    return { fijo: null, error: ultimoFallo.mensaje };
   }
 }
 
@@ -93,11 +98,6 @@ async function demo(env: Env): Promise<Response> {
   });
 }
 
-async function limiteDeSimulacion(request: Request, env: Env): Promise<Response | null> {
-  const persona = await huellaIp(request, env);
-  return (await consumir(env.DB, `simulacion:${persona}`, LIMITES.simulacionPorPersona)) ? null : json({ error: "Demasiados pagos simulados en poco tiempo. Espera unos minutos." }, 429);
-}
-
 async function simularDemo(request: Request, env: Env, url: URL, avisar: Avisador): Promise<Response> {
   if (!modoSimulacion(env)) return json({ error: SOLO_SIMULACION }, 404);
   const excedido = await limiteDeSimulacion(request, env);
@@ -136,13 +136,7 @@ async function simularCobro(request: Request, env: Env, url: URL, token: string,
   if (estadoDelCobro(cobro) === "vencido") return json({ error: "Este cobro ya venció." }, 409);
   const excedido = await limiteDeSimulacion(request, env);
   if (excedido) return excedido;
-  return simularPago(
-    env,
-    url,
-    { tipo: cobro.medio === "push" ? "pn" : "qr", peyId: cobro.pey_id, folio: cobro.folio, cobroId: cobro.id, creditoId: cobro.credito_id, montoCentavos: cobro.monto_centavos },
-    { conAviso: true },
-    avisar,
-  );
+  return simularPago(env, url, pagoDelCobro(cobro), { conAviso: true }, avisar);
 }
 
 export async function manejarPublico(request: Request, env: Env, url: URL, avisar: Avisador, conectar: (canal: Canal) => Promise<Response>): Promise<Response> {

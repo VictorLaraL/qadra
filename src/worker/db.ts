@@ -96,14 +96,24 @@ export interface CreditoPorCargar extends CreditoImportado {
 /**
  * Sentencias que borran la cartera con todo lo que cuelga de ella (cobros, pagos, visitas) y cargan una nueva.
  * No toca `recibidos` (pagos reales ya procesados) ni `qr_fijos`.
+ *
+ * Con `conservarCobrosVigentes` (cuando se vuelve a cargar la misma cartera de ejemplo) los cobros pendientes que
+ * aún no vencen se quedan: quien ya tiene el QR en la mano todavía puede pagarlo y su pago se concilia.
  */
-export function sentenciasDeCartera(db: D1Database, listaGestores: FilaGestor[], creditos: CreditoPorCargar[], ahora: string): D1PreparedStatement[] {
-  const borrar = ["aplicaciones", "pagos", "cobros", "gestiones", "ejemplos", "cuotas", "creditos", "gestores", "pey_simulado"].map((t) =>
-    db.prepare(`DELETE FROM ${t}`),
-  );
+export function sentenciasDeCartera(
+  db: D1Database,
+  listaGestores: FilaGestor[],
+  creditos: CreditoPorCargar[],
+  ahora: string,
+  opciones: { conservarCobrosVigentes?: boolean } = {},
+): D1PreparedStatement[] {
+  const borrar = ["aplicaciones", "pagos", "gestiones", "ejemplos", "cuotas", "creditos", "gestores", "pey_simulado"].map((t) => db.prepare(`DELETE FROM ${t}`));
   const filasCuotas = creditos.flatMap((c) => generarCuotas(c).map((q) => [c.id, q.numero, q.vence, q.montoCentavos, q.pagadoCentavos]));
   return [
     ...borrar,
+    opciones.conservarCobrosVigentes
+      ? db.prepare("DELETE FROM cobros WHERE NOT (estado = 'pendiente' AND vence_en > ?)").bind(ahora)
+      : db.prepare("DELETE FROM cobros"),
     db.prepare("DELETE FROM recibidos WHERE origen <> 'codi'"),
     ...insertarFilas(
       db,

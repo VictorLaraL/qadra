@@ -6,6 +6,7 @@
 // Usan créditos del primer gestor que no reciben pagos de ejemplo, para no depender de la hora del día.
 
 import assert from "node:assert/strict";
+import { execSync } from "node:child_process";
 import { test } from "node:test";
 import { api, avisoDePago, BASE, enviarAviso, enviarCuerpoFirmado, leerDevVars } from "./comun.ts";
 
@@ -173,6 +174,17 @@ test("cobro al celular: guarda solo los últimos 4 dígitos y se concilia por la
   assert.equal(pagado.datos.recibo.medio, "pn");
 });
 
+test("los cobros al celular tienen un límite propio y más bajo: no sirven para mandar solicitudes en masa", async () => {
+  const push = () => crearCobro({ creditoId: "004533", montoCentavos: 100, medio: "push", telefono: "9991234567" });
+  // Ya se mandó uno en la prueba anterior; el límite es de 3 cada 10 minutos por persona.
+  assert.equal((await push()).status, 201);
+  assert.equal((await push()).status, 201);
+  const cuarto = await push();
+  assert.equal(cuarto.status, 429);
+  assert.match(cuarto.datos.error, /cobros al celular/);
+  assert.equal((await crearCobro({ creditoId: "004533", montoCentavos: 7, medio: "qr" })).status, 201, "los cobros por QR siguen disponibles");
+});
+
 test("dos pagos al mismo tiempo sobre el mismo crédito se aplican completos y ninguna cuota queda pagada de más", async () => {
   const antes = await detalle("004527");
   const actual = antes.credito.estado.cuotaActual; // cuota 7 de $380.00, y la 8 vence hoy
@@ -317,7 +329,19 @@ test("una excepción aparece en la conciliación y se resuelve asignándola a un
 
   assert.equal((await api(`/api/app/excepciones/${tx}/resolver`, { clave: JURADO, cuerpo: { creditoId: "004563" } })).status, 409);
   assert.equal((await api("/api/app/excepciones/NOEXISTE/resolver", { clave: JURADO, cuerpo: { creditoId: "004563" } })).status, 404);
-  assert.equal((await api(`/api/app/excepciones/${tx}/resolver`, { clave: JURADO, cuerpo: { creditoId: "NOEXISTE" } })).status, 409);
+});
+
+test("asignar una excepción a un crédito que no existe no aplica nada y la excepción sigue abierta", async () => {
+  const tx = (await simular({ tipo: "sin-referencia", montoCentavos: 12_300 })).datos.transactionId as string;
+  const r = await api(`/api/app/excepciones/${tx}/resolver`, { clave: JURADO, cuerpo: { creditoId: "NOEXISTE" } });
+  assert.deepEqual([r.status, r.datos.error], [404, "No existe ese crédito."]);
+  assert.equal((await api(`/api/app/excepciones/${tx}/resolver`, { clave: JURADO, cuerpo: { creditoId: "crédito inválido" } })).status, 400);
+
+  const abiertas = (await api("/api/app/conciliacion?estado=excepcion", { clave: JURADO })).datos.pagos;
+  const sigue = abiertas.find((p: any) => p.transactionId === tx);
+  assert.deepEqual([sigue.estado, sigue.aplicadoCentavos, sigue.creditoId], ["excepcion", 0, null]);
+  const demasiado = await simular({ tipo: "sin-referencia", montoCentavos: 10_000_001 });
+  assert.deepEqual([demasiado.status, demasiado.datos.error], [400, "El monto simulado debe estar entre $0.01 y $100,000.00."]);
 });
 
 test("cuadre con pey: detecta el pago cuyo aviso se perdió, lo recupera consultando a pey y el día vuelve a cuadrar", async () => {
@@ -442,6 +466,40 @@ test("la página de pago se abre con el link del cobro, no muestra el nombre del
 });
 
 // ---------------------------------------------------------------------------------------------------------------
+// Reinicio de la demo y puesta al día
+// ---------------------------------------------------------------------------------------------------------------
+
+/** Dispara el cron del Worker local (wrangler dev --test-scheduled). */
+async function correrCron() {
+  const r = await fetch(`${BASE}/__scheduled?cron=*%2F5+*+*+*+*`);
+  assert.equal(r.status, 200, "el cron local no respondió");
+}
+
+/** Escribe directo en la base local de `wrangler dev`. El SQL no lleva comillas dobles. */
+function sql(comando: string) {
+  execSync(`npx wrangler d1 execute qadra --local --command "${comando}"`, { stdio: "ignore", env: { ...process.env, CI: "1" } });
+}
+
+test("un cobro pendiente sobrevive al reinicio de la cartera de ejemplo: quien ya tiene el QR todavía puede pagar", async () => {
+  const { cobro } = (await crearCobro({ creditoId: "004533", montoCentavos: 125_000, medio: "qr" })).datos;
+  assert.equal((await api("/api/app/reiniciar", { clave: ADMIN, metodo: "POST" })).status, 200);
+
+  const despues = await api(`/api/app/cobros/${cobro.id}`, { clave: JURADO });
+  assert.deepEqual([despues.status, despues.datos.cobro.estado], [200, "pendiente"]);
+  assert.deepEqual((await simular({ tipo: "cobro", cobroId: cobro.id })).datos.estado, "aplicado");
+  assert.equal((await detalle("004533")).credito.estado.cuotaActual.numero, 6, "el pago se aplicó a la cartera recién cargada");
+});
+
+test("poner la demo al día varias veces no repite los pagos de ejemplo de los otros gestores", async () => {
+  await correrCron();
+  const antes = (await api("/api/app/resumen", { clave: JURADO })).datos.hoy;
+  await correrCron();
+  await correrCron();
+  const despues = (await api("/api/app/resumen", { clave: JURADO })).datos.hoy;
+  assert.deepEqual([despues.deEjemplo, despues.pagos], [antes.deEjemplo, antes.pagos]);
+});
+
+// ---------------------------------------------------------------------------------------------------------------
 // Cartera por archivo (al final: reemplaza la cartera de ejemplo)
 // ---------------------------------------------------------------------------------------------------------------
 
@@ -471,6 +529,11 @@ test("la cartera se valida antes de importarla, solo el administrador la reempla
   const cartera = await api("/api/app/cartera", { clave: JURADO });
   assert.deepEqual(cartera.datos.creditos.map((c: any) => c.id).sort(), ["A-1001", "A-1002"]);
   assert.equal((await api("/api/demo")).datos.credito, null, "con otra cartera, la demo pública avisa que no está disponible");
+
+  // Al cambiar de día solo se regenera la cartera de ejemplo: una cartera importada no se borra sola.
+  sql("UPDATE ajustes SET valor = '2000-01-01' WHERE clave = 'dia'");
+  await correrCron();
+  assert.deepEqual((await api("/api/app/cartera", { clave: JURADO })).datos.total, 2);
 
   assert.equal((await api("/api/app/reiniciar", { clave: ADMIN, metodo: "POST" })).status, 200);
   assert.equal((await api("/api/app/cartera", { clave: JURADO })).datos.total, 24);

@@ -1,7 +1,7 @@
 // Tableros: la ruta del día del gestor y, para el portal, el resumen, la cartera, la conciliación y el corte.
 
 import { compararConPey, type Cuadre } from "../core/conciliacion.ts";
-import { inicioDelDiaCdmx } from "../core/fechas.ts";
+import { inicioDelDiaCdmx, relojCdmx } from "../core/fechas.ts";
 import { enmascararRastreo, totalPaginas } from "../core/validaciones.ts";
 import { agruparAplicaciones, pagoVisible, type CuotasPorPago, type FilaAplicacion, type FilaPago } from "./consultas.ts";
 import { creditosConEstado, gestores, type CreditoConEstado } from "./db.ts";
@@ -226,7 +226,7 @@ export async function resumenDelPortal(db: D1Database, hoy: string, rol: Rol, ah
 const sinAcentos = (texto: string) =>
   texto
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/\p{M}/gu, "")
     .toLowerCase();
 const ORDEN_SITUACION: Record<string, number> = { atrasado: 0, "vence-hoy": 1, "al-corriente": 2, liquidado: 3 };
 
@@ -340,8 +340,6 @@ export async function corteDelDia(env: Env, hoy: string, opciones: { conPey: boo
   return corte;
 }
 
-const DESFASE_CDMX_MS = 6 * 3_600_000;
-
 export const COLUMNAS_DE_PAGOS = [
   "fecha",
   "hora",
@@ -371,10 +369,10 @@ export async function pagosParaExportar(db: D1Database, rol: Rol, ahora = new Da
     .all<FilaPagoConNombre & { cuota_numero: number | null; aplicado_a_cuota: number | null }>();
   const decimal = (centavos: number | null) => (centavos === null ? null : (centavos / 100).toFixed(2));
   return results.map((p) => {
-    const local = new Date(Date.parse(p.fecha_pago) - DESFASE_CDMX_MS).toISOString();
+    const local = relojCdmx(p.fecha_pago);
     return [
-      local.slice(0, 10),
-      local.slice(11, 19),
+      local.dia,
+      local.hora,
       p.credito_id,
       p.acreditado,
       p.cuota_numero,
