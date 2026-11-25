@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es-MX">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Qadra · Portal de la financiera</title>
+    <meta name="description" content="Portal de la financiera: cobranza del día, conciliación automática, cuadre contra pey y cartera." />
+    <meta name="theme-color" content="#0E1A33" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="/marca/icono.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@700;800&display=swap"
+    />
+    <link rel="stylesheet" href="/estilos.css" />
+    <link rel="stylesheet" href="/portal/portal.css" />
+  </head>
+  <body class="portal">
+    <div id="entrada" class="entrada trama" hidden>
+      <form id="f-entrada" class="entrada-caja" novalidate>
+        <a class="marca" href="/" id="entrada-marca"></a>
+        <h1>Portal de la financiera</h1>
+        <p class="nota">Cobranza del día, conciliación y cartera.</p>
+        <label class="campo"><span>Clave de acceso</span>
+          <input name="clave" type="password" autocomplete="current-password" required /></label>
+        <p class="error" id="entrada-error" hidden role="alert"></p>
+        <button class="boton ancho">Entrar</button>
+        <div id="entrada-demo" hidden>
+          <button type="button" class="boton suave ancho" id="entrar-demo">Entrar a la demo</button>
+          <p class="nota">La demo está en modo simulación: los pagos son de mentira y se rotulan como simulados.</p>
+        </div>
+      </form>
+    </div>
+
+    <div id="marco" hidden>
+      <div id="cinta"></div>
+      <header class="tope">
+        <a class="marca" href="/" id="tope-marca"></a>
+        <span class="tope-financiera" id="financiera"></span>
+        <span class="tope-espacio"></span>
+        <span class="tope-vivo" id="vivo"><span class="pulso"></span><span>Conectando…</span></span>
+        <span class="etiqueta lisa" id="rol"></span>
+        <button class="enlace" id="salir">Salir</button>
+      </header>
+      <nav class="pestanas" aria-label="Secciones del portal">
+        <button data-vista="resumen" aria-current="page">Resumen</button>
+        <button data-vista="conciliacion">Conciliación <span class="cuenta" id="cuenta-excepciones" hidden></span></button>
+        <button data-vista="cartera">Cartera</button>
+        <button data-vista="integracion">Integración</button>
+        <a class="pestanas-app" href="/gestor/" target="_blank" rel="noopener">Abrir la app del gestor ↗</a>
+      </nav>
+      <main id="vista" aria-live="polite"></main>
+    </div>
+
+    <div id="capa"></div>
+    <noscript><p style="padding: 24px">El portal necesita JavaScript.</p></noscript>
+    <script src="/vendor/qrcode-1.4.4.js"></script>
+    <script type="module" src="/portal/portal.js"></script>
+  </body>
+</html>
