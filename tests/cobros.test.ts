@@ -90,6 +90,21 @@ test("si pey rechaza el cobro, no queda ningún cobro guardado", async () => {
   assert.deepEqual(registro, ["buscar-vigente", "folio-libre", "guardar-cobro", "pey", "borrar-cobro"]);
 });
 
+test("si pey responde con un error suyo (5xx), no se sabe si creó el cobro: se conserva", async () => {
+  const registro: string[] = [];
+  pey(registro, () => Response.json({ error: { message: "Error creating CoDi QR", type: "INTERNAL_SERVER_ERROR" } }, { status: 500 }));
+  await assert.rejects(crearCobro(entorno(registro), QR, "g1"), { name: "ErrorPey", status: 500 });
+  assert.deepEqual(registro, ["buscar-vigente", "folio-libre", "guardar-cobro", "pey"]);
+});
+
+test("sin API key y sin simulación no se llama a pey y no queda ningún cobro guardado", async () => {
+  const registro: string[] = [];
+  pey(registro, () => Response.json({}));
+  const sinLlave = { ...entorno(registro), PEY_API_KEY: "", SIMULACION: "0" } as unknown as Env;
+  await assert.rejects(crearCobro(sinLlave, QR, "g1"), { name: "ErrorPey", tipo: "SIN_CONFIGURAR" });
+  assert.deepEqual(registro, ["buscar-vigente", "folio-libre", "guardar-cobro", "borrar-cobro"]);
+});
+
 test("el cobro al celular manda el número a pey, guarda solo sus últimos 4 dígitos y no reutiliza cobros", async () => {
   const registro: string[] = [];
   const llamadas = pey(registro, () => Response.json({ transactionId: "01TXPUSH", codiId: "12345678901234567890" }));

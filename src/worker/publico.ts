@@ -1,5 +1,6 @@
 // Rutas públicas (sin clave): la demo en vivo de la landing y la página de pago que recibe el acreditado.
 //
+// GET  /api/estado                  modo de la demo (simulación o cobros reales) para la pantalla de entrada
 // GET  /api/demo                    crédito de la demo, su QR fijo de un centavo y los últimos pagos (sin datos del pagador)
 // GET  /api/demo/en-vivo            WebSocket: avisa cada pago al QR de la demo
 // POST /api/demo/simular            solo en simulación: paga el QR de la demo
@@ -14,7 +15,7 @@ import { enmascararRastreo } from "../core/validaciones.ts";
 import { asegurarQrFijo, cobroPorToken, estadoDelCobro, reciboDelCobro, type FilaQrFijo } from "./cobros.ts";
 import { credito, cuotasDe } from "./db.ts";
 import type { Canal } from "./difusor.ts";
-import { modoSimulacion } from "./entorno.ts";
+import { claveDemoActiva, modoSimulacion, topeDemo } from "./entorno.ts";
 import type { Avisador } from "./eventos.ts";
 import { json, log } from "./http.ts";
 import { ErrorPey } from "./pey.ts";
@@ -143,6 +144,10 @@ export async function manejarPublico(request: Request, env: Env, url: URL, avisa
   const metodo = request.method;
   const ruta = url.pathname;
 
+  // Lo mínimo para pintar la pantalla de entrada: si la demo está en simulación y si se entra con la clave "demo".
+  if (ruta === "/api/estado" && metodo === "GET") {
+    return json({ simulacion: modoSimulacion(env), claveDemo: claveDemoActiva(env), topeCentavos: topeDemo(env), financiera: FINANCIERA });
+  }
   if (ruta === "/api/demo/en-vivo" && metodo === "GET") return conectar("demo");
   if (ruta === "/api/demo" && metodo === "GET") {
     await ponerAlDia(env, avisar);

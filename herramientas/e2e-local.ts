@@ -430,6 +430,12 @@ test("el canal en vivo pide un boleto de un solo canal y entrega cada pago al in
 // Público: demo de la landing y página de pago
 // ---------------------------------------------------------------------------------------------------------------
 
+test("el estado público dice si la demo está en simulación, sin revelar claves ni configuración", async () => {
+  const r = await api("/api/estado");
+  assert.deepEqual([r.status, r.datos.simulacion, r.datos.claveDemo, r.datos.topeCentavos], [200, true, false, 0]);
+  assert.deepEqual(Object.keys(r.datos).sort(), ["claveDemo", "financiera", "simulacion", "topeCentavos"]);
+});
+
 test("la demo pública muestra el QR fijo de un centavo sin pedir clave y cada pago se abona al crédito", async () => {
   const antes = await api("/api/demo");
   assert.equal(antes.status, 200, JSON.stringify(antes.datos));
@@ -535,6 +541,9 @@ test("la cartera se valida antes de importarla, solo el administrador la reempla
   await correrCron();
   assert.deepEqual((await api("/api/app/cartera", { clave: JURADO })).datos.total, 2);
 
+  // Un cobro pendiente de la cartera importada no sobrevive al volver a la de ejemplo: su crédito ya no existe.
+  const { cobro } = (await crearCobro({ creditoId: "A-1001", montoCentavos: 45_000, medio: "qr" })).datos;
   assert.equal((await api("/api/app/reiniciar", { clave: ADMIN, metodo: "POST" })).status, 200);
+  assert.equal((await api(`/api/app/cobros/${cobro.id}`, { clave: JURADO })).status, 404);
   assert.equal((await api("/api/app/cartera", { clave: JURADO })).datos.total, 24);
 });

@@ -43,8 +43,16 @@ export class Difusor extends DurableObject<Env> {
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket" || !esCanal(canal)) {
       return new Response("Se espera un WebSocket", { status: 426 });
     }
-    if (this.ctx.getWebSockets(canal).length >= topeDeConexiones(canal)) {
-      return new Response("Demasiadas conexiones en este canal", { status: 503 });
+    // Al llegar al tope se le cede el lugar a quien acaba de llegar: se cierra una conexión anterior en vez de
+    // rechazar la nueva. Así nadie puede ocupar todos los lugares de un canal público y dejar fuera a los demás;
+    // a quien se le cierra, su página se vuelve a conectar sola o sigue consultando cada pocos segundos.
+    const abiertas = this.ctx.getWebSockets(canal);
+    if (abiertas.length >= topeDeConexiones(canal)) {
+      try {
+        abiertas[0].close(1013, "relevo");
+      } catch {
+        // Ya estaba cerrada.
+      }
     }
     const par = new WebSocketPair();
     const [cliente, servidor] = Object.values(par);
