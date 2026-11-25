@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 78" width="600" height="156" role="img" aria-label="Qadra, Cobranza Inteligente. Logotipo para fondos claros (concepto)">
+  <title>Qadra · logotipo horizontal con descriptor, fondos claros (concepto v2)</title>
+  <defs>
+    <linearGradient id="qd" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#12305A"/><stop offset=".55" stop-color="#178373"/><stop offset="1" stop-color="#2BB582"/></linearGradient>
+    <linearGradient id="qt" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#178373"/><stop offset="1" stop-color="#2BB582"/></linearGradient>
+    <linearGradient id="qv" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#19C37D"/><stop offset="1" stop-color="#2BB582"/></linearGradient>
+  </defs>
+  <g transform="translate(2 6)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="7" y="6" width="42" height="42" rx="13" stroke="url(#qd)" stroke-width="7"/>
+    <polyline points="17,27.5 24.5,35 38,20.5" stroke="url(#qv)" stroke-width="6.5"/>
+    <path d="M37 47 C40 55 47 58.5 58 57" stroke="url(#qt)" stroke-width="6.5"/>
+  </g>
+  <!-- Wordmark provisional: sans geométrica ExtraBold. El logo final se dibuja en curvas. -->
+  <text x="76" y="47" font-family="'Plus Jakarta Sans', Montserrat, 'Segoe UI', Arial, sans-serif" font-size="42" font-weight="800" letter-spacing="-1" fill="#0E1A33">Qadra</text>
+  <text x="78" y="68" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="13.5" font-weight="500" letter-spacing="0.4" fill="#5B6473">Cobranza Inteligente</text>
+</svg>
