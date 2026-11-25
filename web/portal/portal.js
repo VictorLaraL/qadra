@@ -158,7 +158,7 @@ function vistaResumen() {
     <div class="dos-columnas">
       <section class="tarjeta">
         <header><h2>Gestores</h2><span class="nota">Visitas y cobranza de hoy</span></header>
-        <table class="tabla"><thead><tr><th>Gestor</th><th>Visitas</th><th class="num">Cobrado</th><th class="num">Pagos</th></tr></thead><tbody>
+        <div class="tabla-ancha"><table class="tabla"><thead><tr><th>Gestor</th><th>Visitas</th><th class="num">Cobrado</th><th class="num">Pagos</th></tr></thead><tbody>
           ${r.gestores
             .map((g) => {
               const p = g.enRuta ? Math.round((g.hechas / g.enRuta) * 100) : 0;
@@ -167,7 +167,7 @@ function vistaResumen() {
                 <td class="num monto"><b>${pesos(g.cobradoCentavos)}</b></td><td class="num cifra">${g.pagos}</td></tr>`;
             })
             .join("")}
-        </tbody></table>
+        </tbody></table></div>
       </section>
       <section class="tarjeta">
         <header><h2>Últimos 7 días</h2><span class="nota">Cobranza por día</span></header>

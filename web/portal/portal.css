@@ -153,7 +153,14 @@ main#vista {
   margin: 0 auto;
   padding: 24px clamp(16px, 4vw, 40px) 64px;
   display: grid;
+  /* minmax(0, …): una tabla ancha se desplaza dentro de su tarjeta en vez de ensanchar toda la página */
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
+}
+
+.fichas > *,
+.dos-columnas > * {
+  min-width: 0;
 }
 
 .titulo-vista h1 {
@@ -980,7 +987,12 @@ main#vista {
   }
 
   .fichas {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tope {
+    flex-wrap: wrap;
+    gap: 10px 14px;
   }
 
   .ecuacion {

@@ -154,6 +154,8 @@ export function aviso(texto, tipo = "") {
 let audio = null;
 /** Firma sonora de "Pagado": dos tonos cortos y una vibración, para saberlo sin mirar la pantalla. */
 export function sonarPagado() {
+  // El navegador solo deja vibrar y sonar después de que la persona tocó la página.
+  if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
   try {
     navigator.vibrate?.([60, 50, 90]);
     audio ??= new (window.AudioContext || window.webkitAudioContext)();

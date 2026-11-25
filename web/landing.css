@@ -1,0 +1,665 @@
+/* Landing de Qadra. Portada nocturna con la trama de cuadras; el resto en claro. */
+
+body.landing {
+  background: var(--blanco);
+}
+
+.saltar {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 50;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--blanco);
+  font-weight: 700;
+}
+
+.saltar:focus {
+  top: 12px;
+}
+
+.antetitulo {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--verde-texto);
+}
+
+/* ------------------------------------------------------------------ Portada */
+
+.portada {
+  background-color: var(--noche);
+  color: #dfe5f0;
+  padding-bottom: clamp(40px, 6vw, 80px);
+}
+
+.nav {
+  width: min(100%, 1200px);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 18px clamp(16px, 4vw, 32px);
+}
+
+.nav .marca {
+  color: #fff;
+}
+
+.nav .marca small,
+.pie-landing .marca small {
+  color: #a9b4c9;
+}
+
+.nav nav {
+  margin-left: auto;
+  display: flex;
+  gap: 22px;
+}
+
+.nav nav a {
+  color: #c8d1e2;
+  font-weight: 600;
+  font-size: 0.94rem;
+  text-decoration: none;
+}
+
+.nav nav a:hover {
+  color: #fff;
+}
+
+.heroe {
+  width: min(100%, 1200px);
+  margin: 0 auto;
+  padding: clamp(24px, 5vw, 64px) clamp(16px, 4vw, 32px) 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  align-items: center;
+  gap: clamp(32px, 5vw, 72px);
+}
+
+.portada .antetitulo {
+  color: var(--esmeralda);
+}
+
+.heroe h1 {
+  margin: 14px 0 20px;
+  font-size: clamp(3rem, 8.2vw, 6rem);
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+  color: #fff;
+}
+
+.heroe h1 em {
+  font-style: normal;
+  background: linear-gradient(120deg, #2bb582 10%, #7fe7bf 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.entrada-texto {
+  max-width: 34rem;
+  font-size: clamp(1.05rem, 1.6vw, 1.22rem);
+  color: #c8d1e2;
+}
+
+.entrada-texto b {
+  color: #fff;
+  font-weight: 600;
+}
+
+.heroe-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.heroe-botones.centro {
+  justify-content: center;
+}
+
+.heroe-botones .boton {
+  min-height: 54px;
+  padding: 0 26px;
+  font-size: 1.04rem;
+}
+
+.boton.fantasma {
+  background: rgb(255 255 255 / 8%);
+  border-color: rgb(255 255 255 / 22%);
+  color: #fff;
+}
+
+.boton.fantasma:hover {
+  background: rgb(255 255 255 / 16%);
+}
+
+.sellos {
+  list-style: none;
+  margin: 32px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+  font-size: 0.92rem;
+  color: #a9b4c9;
+}
+
+.sellos b {
+  color: #fff;
+}
+
+.sellos li::before {
+  content: "✓";
+  margin-right: 8px;
+  color: var(--esmeralda);
+  font-weight: 800;
+}
+
+/* ------------------------------------------------------------------ Teléfono de la demo */
+
+.demo {
+  display: grid;
+  justify-items: center;
+  scroll-margin-top: 24px;
+}
+
+.telefono-demo {
+  width: min(100%, 372px);
+  border-radius: 38px;
+  border: 10px solid #1c2740;
+  background: var(--fondo);
+  color: var(--nocturno);
+  overflow: hidden;
+  box-shadow:
+    0 0 0 2px #2c3a5c,
+    0 40px 90px rgb(0 0 0 / 55%),
+    0 0 120px rgb(25 195 125 / 10%);
+}
+
+.td-barra {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 16px 14px;
+  background: var(--nocturno);
+  color: #fff;
+}
+
+.td-barra b {
+  font-family: var(--titulos);
+  flex: 1;
+}
+
+.td-vivo {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #c8d1e2;
+}
+
+.td-cuerpo {
+  min-height: 470px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.td-cargando {
+  padding: 60px 0;
+  text-align: center;
+  color: var(--acero);
+}
+
+.td-credito {
+  padding: 14px 16px;
+  border-radius: var(--radio);
+  background: var(--blanco);
+  border: 1px solid var(--niebla);
+  display: grid;
+  gap: 4px;
+}
+
+.td-credito small {
+  color: var(--acero);
+  font-size: 0.78rem;
+}
+
+.td-credito b {
+  font-family: var(--titulos);
+  font-size: 1.25rem;
+}
+
+.td-credito span {
+  font-size: 0.88rem;
+  color: var(--grafito);
+}
+
+.td-credito .avance {
+  height: 8px;
+  margin: 6px 0 2px;
+  border-radius: 999px;
+  background: var(--niebla);
+  overflow: hidden;
+}
+
+.td-credito .avance i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--esmeralda);
+  transition: width 0.6s ease;
+}
+
+.td-cobrar {
+  min-height: 58px;
+  font-size: 1.08rem;
+}
+
+.td-nota,
+.td-instruccion {
+  text-align: center;
+  font-size: 0.86rem;
+  color: var(--grafito);
+}
+
+.td-cuerpo .qr {
+  width: min(100%, 260px);
+  justify-self: center;
+  border: 1px solid var(--niebla);
+}
+
+.td-esperando {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: var(--radio-chico);
+  background: var(--azul-suave);
+  color: #173bb0;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.td-pagado {
+  padding: 22px 4px 6px;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  text-align: center;
+}
+
+.td-titulo {
+  font-family: var(--titulos);
+  font-size: 2rem;
+  font-weight: 800;
+  margin-top: 6px;
+}
+
+.td-pagado dl {
+  width: 100%;
+  margin: 10px 0;
+  padding: 2px 14px;
+  border-radius: var(--radio);
+  background: var(--blanco);
+  border: 1px solid var(--niebla);
+  text-align: left;
+}
+
+.td-pagado dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--niebla);
+}
+
+.td-pagado dl div:last-child {
+  border-bottom: 0;
+}
+
+.td-pagado dt {
+  font-size: 0.84rem;
+  color: var(--acero);
+}
+
+.td-pagado dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+}
+
+.td-aviso {
+  padding: 40px 12px;
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  text-align: center;
+}
+
+/* ------------------------------------------------------------------ Secciones */
+
+main > section {
+  width: min(100%, 1200px);
+  margin: 0 auto;
+  padding: clamp(48px, 7vw, 96px) clamp(16px, 4vw, 32px) 0;
+}
+
+main h2 {
+  max-width: 44rem;
+  margin: 10px 0 28px;
+  font-size: clamp(1.7rem, 3.6vw, 2.6rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.rejilla {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rejilla.cuatro {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.rejilla.tres {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.rejilla .tarjeta {
+  padding: 22px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  background: var(--fondo);
+  border-color: transparent;
+}
+
+.rejilla h3 {
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.rejilla p {
+  color: var(--grafito);
+  font-size: 0.95rem;
+}
+
+.problema .tarjeta strong {
+  font-family: var(--titulos);
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--nocturno);
+}
+
+.problema .tarjeta h3 {
+  font-family: var(--texto);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  margin-top: -4px;
+}
+
+.problema sup {
+  font-size: 0.7em;
+  color: var(--acero);
+}
+
+.pasos .paso {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--nocturno);
+  color: var(--esmeralda);
+  font-family: var(--titulos);
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.incluye .enlace {
+  justify-self: start;
+  margin-top: 2px;
+}
+
+/* Oficina: lo que ve la financiera mientras el gestor cobra */
+
+.oficina {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(24px, 5vw, 64px);
+  align-items: center;
+}
+
+.oficina h2 {
+  margin-bottom: 16px;
+}
+
+.oficina-texto > p {
+  color: var(--grafito);
+  font-size: 1.05rem;
+  max-width: 34rem;
+}
+
+.contadores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 36px;
+  margin-top: 26px;
+}
+
+.contadores strong {
+  display: block;
+  font-family: var(--titulos);
+  font-size: 2.3rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.contadores span {
+  font-size: 0.86rem;
+  color: var(--acero);
+}
+
+.conciliados {
+  padding: 22px;
+  box-shadow: var(--sombra);
+}
+
+.conciliados header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.conciliados h3 {
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.lista-demo {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  min-height: 150px;
+}
+
+.lista-demo li {
+  display: grid;
+  grid-template-columns: 76px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 8px;
+  border-bottom: 1px solid var(--niebla);
+  border-radius: 8px;
+  font-size: 0.92rem;
+}
+
+.lista-demo li.nota {
+  display: block;
+  padding: 40px 8px;
+  text-align: center;
+  border-bottom: 0;
+}
+
+.lista-demo time {
+  color: var(--acero);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.lista-demo small {
+  display: block;
+  color: var(--acero);
+}
+
+.lista-demo .nuevo {
+  animation: destello 6s ease-out both;
+}
+
+@keyframes destello {
+  0%,
+  35% {
+    background: var(--verde-suave);
+  }
+
+  100% {
+    background: transparent;
+  }
+}
+
+/* Tabla del API de pey */
+
+.tabla-pey {
+  border: 1px solid var(--niebla);
+  border-radius: var(--radio);
+  overflow: hidden;
+}
+
+.tabla-pey [role="row"] {
+  display: grid;
+  grid-template-columns: minmax(200px, 300px) 1fr;
+  gap: 18px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--niebla);
+  align-items: center;
+}
+
+.tabla-pey [role="row"]:last-child {
+  border-bottom: 0;
+}
+
+.tabla-pey [role="row"] > .mono {
+  font-weight: 600;
+  color: var(--nocturno);
+  overflow-wrap: anywhere;
+}
+
+.tabla-pey [role="cell"]:last-child {
+  color: var(--grafito);
+}
+
+/* Cierre */
+
+main > section.cierre {
+  width: auto;
+  margin-top: clamp(48px, 7vw, 96px);
+  padding: clamp(48px, 7vw, 88px) 20px;
+  background-color: var(--noche);
+  color: #c8d1e2;
+  text-align: center;
+}
+
+.cierre h2 {
+  margin: 0 auto 10px;
+  color: #fff;
+}
+
+.pie-landing {
+  background: var(--noche);
+  color: #8f9bb3;
+  border-top: 1px solid rgb(255 255 255 / 8%);
+  padding: 28px clamp(16px, 4vw, 32px) 36px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  font-size: 0.84rem;
+}
+
+.pie-landing .marca {
+  color: #fff;
+  margin-bottom: 10px;
+}
+
+.pie-landing a {
+  color: #b9c6e0;
+}
+
+.fuentes {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+
+/* ------------------------------------------------------------------ Pantallas chicas */
+
+@media (max-width: 960px) {
+  .heroe,
+  .oficina {
+    grid-template-columns: 1fr;
+  }
+
+  .rejilla.cuatro {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .rejilla.tres {
+    grid-template-columns: 1fr;
+  }
+
+  .nav nav {
+    display: none;
+  }
+
+  .nav .boton {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .rejilla.cuatro {
+    grid-template-columns: 1fr;
+  }
+
+  .tabla-pey [role="row"] {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .pie-landing {
+    grid-template-columns: 1fr;
+  }
+
+  .heroe-botones .boton {
+    flex: 1 1 100%;
+  }
+}

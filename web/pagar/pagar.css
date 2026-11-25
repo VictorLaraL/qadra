@@ -1,0 +1,213 @@
+/* Página de pago con la marca de la financiera (marca blanca). Colores de Financiera Jacaranda, no de Qadra. */
+
+body.pagar {
+  --jacaranda: #4b33b8;
+  --jacaranda-oscuro: #2d1f7a;
+  --lila: #efeaff;
+  --electrico: var(--jacaranda);
+  --azul-suave: var(--lila);
+
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: linear-gradient(180deg, var(--lila) 0, #f7f6fb 320px);
+  color: #1f1a3d;
+}
+
+.cabeza {
+  width: min(100%, 460px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 22px 20px 10px;
+}
+
+.cabeza b {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.cabeza small {
+  color: #5d5880;
+  font-size: 0.82rem;
+}
+
+#pago {
+  width: min(100%, 460px);
+  padding: 8px 16px 24px;
+  flex: 1;
+}
+
+.cargando {
+  padding: 48px 0;
+  text-align: center;
+  color: #5d5880;
+}
+
+.tarjeta {
+  padding: 24px 22px;
+  border-radius: 22px;
+  border-color: #e3ddf7;
+  box-shadow: 0 12px 40px rgb(45 31 122 / 10%);
+  display: grid;
+  gap: 14px;
+}
+
+.tarjeta.centro {
+  text-align: center;
+  padding: 40px 24px;
+}
+
+.tarjeta h1 {
+  font-family: var(--texto);
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.antetitulo {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--jacaranda);
+}
+
+.monto.grande {
+  font-size: 2.9rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.sin-comision {
+  color: #5d5880;
+  font-size: 0.9rem;
+  margin-top: -6px;
+}
+
+.pagar .boton {
+  background: var(--jacaranda);
+}
+
+.pagar .boton:hover {
+  background: var(--jacaranda-oscuro);
+}
+
+.pagar .boton.suave {
+  background: var(--lila);
+  color: var(--jacaranda-oscuro);
+}
+
+.pagar .boton.verde {
+  background: var(--esmeralda);
+  color: #0e1a33;
+}
+
+.pagar .qr {
+  border: 1px solid #e3ddf7;
+  width: min(100%, 320px);
+  justify-self: center;
+}
+
+.pasos {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 8px;
+  font-size: 0.95rem;
+}
+
+.push {
+  padding: 22px 18px;
+  border-radius: 16px;
+  background: var(--lila);
+  display: grid;
+  gap: 6px;
+}
+
+.esperando {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--lila);
+  color: var(--jacaranda-oscuro);
+}
+
+.cuenta {
+  margin-left: auto;
+  font-size: 0.86rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.pagado {
+  justify-items: center;
+  text-align: center;
+}
+
+.pagado > .datos,
+.pagado > .boton {
+  width: 100%;
+}
+
+.datos {
+  margin: 4px 0 0;
+  padding: 2px 16px;
+  border-radius: 16px;
+  background: #f7f6fb;
+  text-align: left;
+}
+
+.datos div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 0;
+  border-bottom: 1px solid #e3ddf7;
+}
+
+.datos div:last-child {
+  border-bottom: 0;
+}
+
+.datos dt {
+  color: #5d5880;
+  font-size: 0.86rem;
+  flex: none;
+}
+
+.datos dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.nota.simulado {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--ambar-suave);
+  color: var(--ambar-texto);
+  font-weight: 600;
+}
+
+.pie {
+  width: min(100%, 460px);
+  padding: 8px 20px 28px;
+  display: grid;
+  gap: 4px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: #6d6990;
+}
+
+.pie a {
+  color: inherit;
+  font-weight: 600;
+}

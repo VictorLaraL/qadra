@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es-MX">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Paga tu crédito · Financiera Jacaranda</title>
+    <meta name="description" content="Paga tu crédito con CoDi desde la app de tu banco, sin comisión." />
+    <meta name="theme-color" content="#4B33B8" />
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="/pagar/jacaranda.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Inter:wght@400;500;600;700;800&display=swap" />
+    <link rel="stylesheet" href="/estilos.css" />
+    <link rel="stylesheet" href="/pagar/pagar.css" />
+  </head>
+  <!-- Esta página lleva la marca de la financiera, no la de Qadra: es lo que ve el acreditado. -->
+  <body class="pagar">
+    <header class="cabeza">
+      <img src="/pagar/jacaranda.svg" width="40" height="40" alt="" />
+      <div><b id="financiera">Financiera Jacaranda</b><small id="lema">Crédito que crece contigo</small></div>
+    </header>
+    <main id="pago" aria-live="polite"><p class="cargando">Cargando tu pago…</p></main>
+    <footer class="pie">
+      <p id="aviso-ficticia">Financiera Jacaranda es una empresa ficticia creada para esta demostración.</p>
+      <p>Tecnología de cobro: <a href="/">Qadra</a></p>
+    </footer>
+    <noscript><p style="padding: 24px">Esta página necesita JavaScript.</p></noscript>
+    <script src="/vendor/qrcode-1.4.4.js"></script>
+    <script type="module" src="/pagar/pagar.js"></script>
+  </body>
+</html>
