@@ -38,6 +38,9 @@ const cuota = (cuotas: Cuota[], numero: number) => cuotas.find((c) => c.numero =
 test.before(async () => {
   const r = await api("/api/app/reiniciar", { clave: ADMIN, metodo: "POST" });
   assert.equal(r.status, 200, `No se pudo reiniciar la demo. ¿Está corriendo "npm run dev"? ${JSON.stringify(r.datos)}`);
+  // Los cobros pendientes sobreviven al reinicio a propósito (quien ya tiene el QR todavía puede pagar). Los que haya
+  // dejado una sesión anterior, de pruebas o a mano, se vencen aquí: si no, "crear un cobro" reutilizaría uno viejo.
+  sql("UPDATE cobros SET vence_en = '2000-01-01T00:00:00.000Z' WHERE estado = 'pendiente'");
 });
 
 test("salud del servicio", async () => {

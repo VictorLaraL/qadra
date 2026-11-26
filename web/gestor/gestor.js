@@ -3,7 +3,7 @@
 
 import { $, aviso, copiar, crearApi, diaLargo, direccionWs, enVivo, esc, hora, isotipo, NOMBRE_DE_VISITA, PALOMITA, pesos, plural, situacion, sonarPagado } from "/comun.js";
 import { descargarPng, svgQr } from "/qr.js";
-import { aCentavos, cuotasPagadas, destinoDeVisitaEnCola, estadoDeCuota } from "/reglas.js";
+import { aCentavos, cuotasPagadas, destinoDeVisitaEnCola, esDeOtraSesion, estadoDeCuota } from "/reglas.js";
 
 const app = $("#app");
 
@@ -43,7 +43,10 @@ const e = {
   linkPago: "",
   recibo: null,
   enLinea: navigator.onLine,
-  cola: leer(LLAVE.cola, []), // visitas registradas sin conexión, por enviar
+  // Visitas registradas sin conexión, por enviar. Cada una lleva la huella de la clave que la guardó (nunca la clave):
+  // en un teléfono compartido solo se envían solas las de quien está en sesión. Las de versiones anteriores no traen dueño.
+  cola: leer(LLAVE.cola, []).map((x) => (x?.visita ? x : { dueno: "", visita: x })),
+  huellaDeClave: "", // huella de la clave en sesión, para saber cuáles visitas de la cola son suyas
   error: "",
   ocupado: false,
 };
@@ -73,11 +76,22 @@ function barra(titulo, { volver = false, derecha = "" } = {}) {
   </header>`;
 }
 
+const visitasMias = () => e.cola.filter((x) => !esDeOtraSesion(x.dueno, e.huellaDeClave));
+const visitasAjenas = () => e.cola.filter((x) => esDeOtraSesion(x.dueno, e.huellaDeClave));
+
 function avisosDeEstado() {
   const partes = [];
   if (!e.enLinea) partes.push('<div class="franja">Sin conexión. Lo que registres se envía al reconectar.</div>');
-  else if (e.rutaGuardada || e.sesionGuardada) partes.push('<div class="franja">Mostrando la última ruta guardada.</div>');
-  if (e.cola.length) partes.push(`<div class="franja azul">${plural(e.cola.length, "visita", "visitas")} por enviar.</div>`);
+  else if (e.rutaGuardada) partes.push('<div class="franja">Mostrando la última ruta guardada.</div>');
+  else if (e.sesionGuardada) partes.push('<div class="franja">El servidor no responde: la app trabaja con lo guardado en este teléfono.</div>');
+  const mias = visitasMias().length;
+  const ajenas = visitasAjenas().length;
+  if (mias) partes.push(`<div class="franja azul">${plural(mias, "visita", "visitas")} por enviar.</div>`);
+  if (ajenas) {
+    partes.push(
+      `<div class="franja azul">${ajenas === 1 ? "1 visita guardada" : `${ajenas} visitas guardadas`} con otra clave en este teléfono. <button class="enlace" data-accion="revisar-cola">Revisar</button></div>`,
+    );
+  }
   const h = e.sesion?.horario;
   // Con la sesión guardada no se sabe la hora del servidor: el aviso de horario se muestra solo con datos frescos.
   if (h && !h.dentro && !e.sesionGuardada) {
@@ -306,9 +320,20 @@ function hojaGestores() {
     <button type="button" class="enlace centro" data-accion="cerrar-hoja">Cerrar</button></div>`;
 }
 
+/** Visitas que guardó otra clave en este teléfono: quien entró decide si son suyas (se envían) o se borran. */
+function hojaColaAjena() {
+  const n = visitasAjenas().length;
+  return `<div class="velo" data-accion="cerrar-hoja"></div>
+  <div class="hoja" role="dialog" aria-label="Visitas guardadas con otra clave"><h3>${n === 1 ? "Hay 1 visita guardada con otra clave" : `Hay ${n} visitas guardadas con otra clave`}</h3>
+    <p class="nota">Se registraron en este teléfono, sin conexión, con una clave distinta a la tuya. Si son tuyas (por ejemplo, te cambiaron la clave), envíalas. Si son de otra persona, no las envíes con tu clave.</p>
+    <button class="boton ancho" data-accion="adoptar-cola">Son mías: enviarlas</button>
+    <button type="button" class="boton secundario ancho" data-accion="borrar-cola-ajena">No son mías: borrarlas</button>
+    <button type="button" class="enlace centro" data-accion="cerrar-hoja">Decidir después</button></div>`;
+}
+
 /** Salir con visitas sin enviar: la persona decide si se queda (se envían solas) o si sale y se borran. */
 function hojaSalida() {
-  const n = e.cola.length;
+  const n = visitasMias().length;
   return `<div class="velo" data-accion="cerrar-hoja"></div>
   <div class="hoja" role="dialog" aria-label="Visitas sin enviar"><h3>${n === 1 ? "Hay 1 visita sin enviar" : `Hay ${n} visitas sin enviar`}</h3>
     <p class="nota">No se pudieron enviar en este momento. Si te quedas, se envían solas al recuperar la señal. Si sales, se borran de este teléfono para que no las envíe la siguiente persona que lo use.</p>
@@ -376,7 +401,7 @@ function vistaPagado() {
 
 function pintar() {
   const vistas = { entrada: vistaEntrada, ruta: vistaRuta, ficha: vistaFicha, cobro: vistaCobro, pagado: vistaPagado };
-  const hojas = { cobrar: hojaCobrar, visita: hojaVisita, gestores: hojaGestores, salida: hojaSalida };
+  const hojas = { cobrar: hojaCobrar, visita: hojaVisita, gestores: hojaGestores, salida: hojaSalida, "cola-ajena": hojaColaAjena };
   if (e.vista === "cargando") return;
   // La pantalla es la que se desplaza; las hojas se quedan fijas sobre ella, dentro del marco del teléfono.
   const mismaVista = app.dataset.vista === e.vista;
@@ -525,11 +550,30 @@ async function entrar(clave) {
     e.sesionGuardada = true;
   }
   if (!e.sesion.gestores.some((g) => g.id === e.gestorId)) e.gestorId = e.sesion.gestores[0]?.id ?? "g1";
+  e.huellaDeClave = await huellaDe(e.clave);
   e.ocupado = false;
   ir("ruta");
   abrirCanal();
   await cargarRuta({ silencio: e.sesionGuardada });
-  enviarCola();
+  if (!e.sesion) return;
+  enviarCola(); // solo salen las visitas que guardó esta misma clave
+  if (visitasAjenas().length && e.vista === "ruta" && !e.hoja) {
+    e.hoja = "cola-ajena"; // las de otra clave se le preguntan a quien entró
+    pintar();
+  }
+}
+
+/**
+ * Huella de la clave para marcar de quién es cada visita de la cola sin guardar la clave: los primeros 16 caracteres
+ * de su SHA-256. Si el navegador no puede calcularla regresa "", y entonces ninguna visita se da por propia.
+ */
+async function huellaDe(clave) {
+  try {
+    const resumen = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`qadra.cola:${clave}`));
+    return [...new Uint8Array(resumen)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+  } catch {
+    return "";
+  }
 }
 
 /** Al volver la señal se pide la sesión otra vez: la guardada puede ser de ayer (fecha, horario, gestores). */
@@ -563,7 +607,7 @@ function salir(mensaje = "") {
   canal?.cerrar();
   clearInterval(vigilancia);
   turnoDeRuta++; // lo que venga en camino ya no se pinta
-  Object.assign(e, { clave: "", sesion: null, sesionGuardada: false, ruta: null, rutaGuardada: false, errorDeRuta: "", ficha: null, cobro: null, recibo: null, linkPago: "" });
+  Object.assign(e, { clave: "", huellaDeClave: "", sesion: null, sesionGuardada: false, ruta: null, rutaGuardada: false, errorDeRuta: "", ficha: null, cobro: null, recibo: null, linkPago: "" });
   olvidarSesion();
   ir("entrada");
   e.error = mensaje;
@@ -577,17 +621,39 @@ function salir(mensaje = "") {
 async function cerrarSesion() {
   await enviarCola();
   if (!e.sesion) return; // la sesión se cerró sola mientras se enviaba (clave vencida)
-  if (e.cola.length) {
+  if (visitasMias().length) {
     e.hoja = "salida";
     return pintar();
   }
   salir();
 }
 
-function salirBorrandoLaCola() {
-  e.cola = [];
+/** Guarda la cola en el teléfono tal como quedó. */
+function guardarCola(cola) {
+  e.cola = cola;
   guardar(LLAVE.cola, e.cola);
+}
+
+function salirBorrandoLaCola() {
+  guardarCola(visitasAjenas()); // solo se borran las propias; las de otra clave las decide su dueño
   salir();
+}
+
+/** Quien entró dice que las visitas guardadas con otra clave son suyas: pasan a su nombre y se envían. */
+function adoptarColaAjena() {
+  guardarCola(e.cola.map((x) => (esDeOtraSesion(x.dueno, e.huellaDeClave) ? { ...x, dueno: e.huellaDeClave } : x)));
+  e.hoja = null;
+  pintar();
+  if (visitasAjenas().length) return aviso("Este navegador no pudo comprobar tu clave: las visitas siguen guardadas.", "mal");
+  enviarCola();
+}
+
+function borrarColaAjena() {
+  const borradas = visitasAjenas().length;
+  guardarCola(visitasMias());
+  e.hoja = null;
+  pintar();
+  aviso(borradas === 1 ? "Se borró 1 visita guardada con otra clave." : `Se borraron ${borradas} visitas guardadas con otra clave.`);
 }
 
 // ------------------------------------------------------------------ Cobro
@@ -706,8 +772,7 @@ async function guardarVisita(forma) {
       boton.textContent = "Guardar visita";
       return errorDeHoja("#error-visita", error.message);
     }
-    e.cola.push(visita);
-    guardar(LLAVE.cola, e.cola);
+    guardarCola([...e.cola, { dueno: e.huellaDeClave, visita }]);
     aviso("Sin señal. Guardamos la visita y la enviamos al reconectar.");
   }
   if (!e.sesion) return;
@@ -733,9 +798,12 @@ async function abrirFichaSilenciosa() {
 }
 
 let envioEnCurso = null;
-/** Manda las visitas guardadas sin conexión. Si ya hay un envío en curso, promete ese mismo. */
+/**
+ * Manda las visitas guardadas sin conexión por la clave que está en sesión (las de otra clave no salen solas).
+ * Si ya hay un envío en curso, promete ese mismo.
+ */
 function enviarCola() {
-  if (!e.cola.length || !e.sesion) return Promise.resolve();
+  if (!e.sesion || !visitasMias().length) return Promise.resolve();
   envioEnCurso ??= vaciarCola().finally(() => (envioEnCurso = null));
   return envioEnCurso;
 }
@@ -744,27 +812,27 @@ async function vaciarCola() {
   let enviadas = 0;
   let rechazadas = 0;
   let claveVencida = false;
-  for (const visita of [...e.cola]) {
+  for (const guardada of visitasMias()) {
     try {
-      await api("/api/app/gestiones", { cuerpo: visita });
+      await api("/api/app/gestiones", { cuerpo: guardada.visita });
       enviadas++;
     } catch (error) {
-      if (destinoDeVisitaEnCola(error.status) === "conservar") {
-        claveVencida = error.status === 401;
-        // Sin red, sin sesión o con el límite de uso alcanzado, las demás fallarían igual: se dejan para después.
-        if (error.status === 0 || error.status === 401 || error.status === 429) break;
-        continue; // falla de esta visita en el servidor: se conserva y se sigue con las demás
+      // Qué se hace con la visita y con el resto de la cola lo dice una sola regla (web/reglas.js).
+      const destino = destinoDeVisitaEnCola(error.status);
+      claveVencida ||= destino.claveVencida;
+      if (destino.conservar) {
+        if (destino.seguir) continue;
+        break;
       }
       rechazadas++; // el servidor dijo que no es válida (o el crédito ya no existe): reintentar no la arregla
     }
-    e.cola = e.cola.filter((v) => v !== visita);
-    guardar(LLAVE.cola, e.cola);
+    guardarCola(e.cola.filter((x) => x !== guardada));
   }
   if (enviadas) aviso(`${plural(enviadas, "visita enviada", "visitas enviadas")}.`, "bien");
   if (rechazadas) aviso(rechazadas === 1 ? "El servidor rechazó 1 visita guardada: no se registró." : `El servidor rechazó ${rechazadas} visitas guardadas: no se registraron.`, "mal");
   if (!e.sesion) return;
   if (claveVencida) return salir(`${CLAVE_VENCIDA} Tus visitas siguen guardadas en este teléfono.`);
-  if (e.hoja === "salida" && !e.cola.length) e.hoja = null; // ya no hay nada que preguntar antes de salir
+  if (e.hoja === "salida" && !visitasMias().length) e.hoja = null; // ya no hay nada que preguntar antes de salir
   if (enviadas) cargarRuta({ silencio: true });
   if (e.vista === "ruta") pintar();
   else refrescarEstado();
@@ -790,6 +858,9 @@ const acciones = {
     cerrarSesion();
   },
   "salir-borrando": salirBorrandoLaCola,
+  "revisar-cola": () => ((e.hoja = "cola-ajena"), pintar()),
+  "adoptar-cola": adoptarColaAjena,
+  "borrar-cola-ajena": borrarColaAjena,
   abrir: (el) => abrirFicha(el.dataset.id),
   volver: () => {
     if (e.vista === "cobro") return ir("ficha"), abrirFichaSilenciosa();

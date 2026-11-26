@@ -95,8 +95,11 @@ async function cargar({ nuevo = false } = {}) {
   pintarOficina(nuevo);
 }
 
+let anunciado = ""; // huella del último pago que ya se mostró como "Pagado": el mismo pago no se anuncia dos veces
+
 function alPagar(pago) {
   ultimoPago = pago;
+  anunciado = huellaDePago(pago);
   vista = "pagado";
   sonarPagado();
   cargar({ nuevo: true });
@@ -123,7 +126,8 @@ async function buscarPagoNuevo(antes = fotoDeLaDemo()) {
   await cargar();
   const ultimo = demo?.ultimos?.[0];
   if (!antes.cargada || !ultimo || huellaDePago(ultimo) === antes.huella) return;
-  if (vista === "pagado" && huellaDePago(ultimoPago) === huellaDePago(ultimo)) return; // ese pago ya está en pantalla
+  // Ese pago ya se anunció (por el canal en vivo o por una consulta anterior), aunque la foto de antes estuviera vieja.
+  if (huellaDePago(ultimo) === anunciado) return;
   alPagar({ ...ultimo, cuota: antes.cuota });
 }
 

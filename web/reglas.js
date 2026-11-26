@@ -13,15 +13,31 @@ export function aCentavos(texto) {
 }
 
 /**
- * Qué hacer con una visita guardada sin conexión cuando falla su envío.
- * Solo se descarta si el servidor la rechazó de forma definitiva (datos inválidos o crédito inexistente): con
- * cualquier otra falla (sin red, sesión vencida, límite de uso o error del servidor) se conserva para reintentar,
- * porque es evidencia del trabajo del gestor.
+ * Qué hacer cuando falla el envío de una visita guardada sin conexión. Toda la política de la cola vive aquí:
+ * - conservar: solo se descarta si el servidor la rechazó de forma definitiva (datos inválidos o crédito inexistente).
+ *   Con cualquier otra falla (sin red, sesión vencida, límite de uso, error del servidor) se conserva para reintentar,
+ *   porque es evidencia del trabajo del gestor.
+ * - seguir: sin red, sin sesión o con el límite de uso alcanzado las demás visitas fallarían igual, así que el envío se
+ *   detiene; una falla de esa visita en particular no impide intentar con las demás.
+ * - claveVencida: la clave dejó de servir y hay que cerrar la sesión.
  * @param {number} status Estado HTTP de la respuesta; 0 si no hubo red.
- * @returns {"conservar" | "descartar"}
+ * @returns {{conservar: boolean, seguir: boolean, claveVencida: boolean}}
  */
 export function destinoDeVisitaEnCola(status) {
-  return status === 400 || status === 404 ? "descartar" : "conservar";
+  return {
+    conservar: status !== 400 && status !== 404,
+    seguir: status !== 0 && status !== 401 && status !== 429,
+    claveVencida: status === 401,
+  };
+}
+
+/**
+ * ¿Una visita guardada en este teléfono es de otra sesión? Si lo es no se envía sola: en un teléfono compartido las
+ * visitas de una persona no deben salir con la clave de otra, así que se le pregunta a quien entró.
+ * `dueno` y `actual` son huellas de la clave (nunca la clave); sin alguna de las dos no se puede afirmar que sea suya.
+ */
+export function esDeOtraSesion(dueno, actual) {
+  return !dueno || !actual || dueno !== actual;
 }
 
 /**
@@ -66,7 +82,10 @@ export function huellaDePago(pago) {
 
 const MIL_PESOS = 100_000; // en centavos
 
-/** Etiqueta corta para la gráfica de la semana: pesos enteros, o miles con un decimal a partir de $1,000. */
+/**
+ * Etiqueta corta para la gráfica de la semana: pesos enteros, o miles con un decimal a partir de $1,000.
+ * Debajo de mil se recorta (no se redondea) para que $999.99 no aparezca como "$1000" junto a un "$1.0k".
+ */
 export function etiquetaDeBarra(centavos) {
-  return centavos >= MIL_PESOS ? `$${(centavos / MIL_PESOS).toFixed(1)}k` : `$${Math.round(centavos / 100)}`;
+  return centavos >= MIL_PESOS ? `$${(centavos / MIL_PESOS).toFixed(1)}k` : `$${Math.floor(centavos / 100)}`;
 }

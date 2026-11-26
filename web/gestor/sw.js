@@ -8,13 +8,12 @@ const CACHE = "qadra-gestor-v2";
 const APP = ["/gestor/", "/gestor/gestor.css", "/gestor/gestor.js", "/estilos.css", "/comun.js", "/qr.js", "/reglas.js", "/vendor/qrcode-1.4.4.js", "/marca/icono.svg"];
 
 self.addEventListener("install", (evento) => {
-  // Cada archivo se guarda por separado: si uno falla (sin espacio, red a medias), los demás quedan guardados y el
-  // service worker se instala de todos modos; lo que falte se guarda la próxima vez que se pida con señal.
+  // Todo o nada: si algún archivo no se pudo guardar (red a medias), esta versión NO se instala y el teléfono se queda
+  // con la anterior y su copia completa. Una copia incompleta dejaría la app sin abrir cuando no haya señal.
   evento.waitUntil(
     caches
       .open(CACHE)
-      .then((cache) => Promise.allSettled(APP.map((ruta) => cache.add(ruta))))
-      .catch(() => {})
+      .then((cache) => cache.addAll(APP))
       .then(() => self.skipWaiting()),
   );
 });

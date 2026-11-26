@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 // Reglas del navegador que no dependen de la página: se prueban aquí igual que el núcleo del servidor.
-import { aCentavos, cuotasPagadas, destinoDeVisitaEnCola, estadoDeCuota, etiquetaDeBarra, huellaDePago, pantallaDePago } from "../web/reglas.js";
+import { aCentavos, cuotasPagadas, destinoDeVisitaEnCola, esDeOtraSesion, estadoDeCuota, etiquetaDeBarra, huellaDePago, pantallaDePago } from "../web/reglas.js";
 
 test("aCentavos del formulario: acepta pesos con o sin centavos y rechaza lo demás", () => {
   assert.equal(aCentavos("450"), 45_000);
@@ -15,9 +15,26 @@ test("aCentavos del formulario: acepta pesos con o sin centavos y rechaza lo dem
 
 test("una visita en cola solo se descarta si el servidor la rechaza de forma definitiva", () => {
   // Sin red, sesión vencida, límite de uso o falla del servidor: la visita se conserva para reintentar.
-  for (const status of [0, 401, 403, 429, 500, 502, 503]) assert.equal(destinoDeVisitaEnCola(status), "conservar", String(status));
+  for (const status of [0, 401, 403, 429, 500, 502, 503]) assert.equal(destinoDeVisitaEnCola(status).conservar, true, String(status));
   // El servidor dijo que esa visita no es válida (datos malos o crédito que ya no existe): reintentar no la arregla.
-  for (const status of [400, 404]) assert.equal(destinoDeVisitaEnCola(status), "descartar", String(status));
+  for (const status of [400, 404]) assert.equal(destinoDeVisitaEnCola(status).conservar, false, String(status));
+});
+
+test("la misma regla dice si vale la pena seguir enviando el resto de la cola", () => {
+  // Sin red, sin sesión o con el límite de uso alcanzado, las demás visitas fallarían igual: el envío se detiene.
+  for (const status of [0, 401, 429]) assert.equal(destinoDeVisitaEnCola(status).seguir, false, String(status));
+  // Una falla de esa visita en particular no impide intentar con las demás.
+  for (const status of [400, 403, 404, 500, 503]) assert.equal(destinoDeVisitaEnCola(status).seguir, true, String(status));
+  // Solo una clave que ya no sirve cierra la sesión.
+  assert.equal(destinoDeVisitaEnCola(401).claveVencida, true);
+  for (const status of [0, 400, 403, 429, 500]) assert.equal(destinoDeVisitaEnCola(status).claveVencida, false, String(status));
+});
+
+test("una visita guardada solo se envía sola si la guardó la misma clave que está en sesión", () => {
+  assert.equal(esDeOtraSesion("abc", "abc"), false, "misma clave: se envía sola");
+  assert.equal(esDeOtraSesion("abc", "xyz"), true, "otra clave: se pregunta");
+  assert.equal(esDeOtraSesion("", "xyz"), true, "visita sin dueño conocido: se pregunta");
+  assert.equal(esDeOtraSesion("abc", ""), true, "sin huella de la sesión no se puede afirmar que sea suya");
 });
 
 test("el estado de una cuota sale de una sola regla, para el color y para el texto que se lee en voz alta", () => {
@@ -55,6 +72,9 @@ test("un pago nuevo se reconoce porque su huella cambia; sin pago no hay huella"
 
 test("la etiqueta de la gráfica abrevia en miles solo a partir de mil pesos", () => {
   assert.equal(etiquetaDeBarra(99_900), "$999");
+  // Justo debajo de mil pesos no se redondea hacia arriba: "$1000" junto a "$1.0k" se contradirían.
+  assert.equal(etiquetaDeBarra(99_950), "$999");
+  assert.equal(etiquetaDeBarra(99_999), "$999");
   assert.equal(etiquetaDeBarra(50_000), "$500");
   assert.equal(etiquetaDeBarra(100_000), "$1.0k");
   assert.equal(etiquetaDeBarra(2_287_000), "$22.9k");
