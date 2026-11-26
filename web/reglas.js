@@ -36,6 +36,34 @@ export function estadoDeCuota(cuota, hoy) {
   return { clase: "", texto: "por vencer" };
 }
 
+const listaEnEspanol = new Intl.ListFormat("es", { style: "long", type: "conjunction" });
+
+/** [7] -> "Cuota 7 pagada completa"; [7, 8, 9] -> "Cuotas 7, 8 y 9 pagadas completas". */
+export function cuotasPagadas(numeros) {
+  const varias = numeros.length > 1;
+  return `${varias ? "Cuotas" : "Cuota"} ${listaEnEspanol.format(numeros.map(String))} ${varias ? "pagadas completas" : "pagada completa"}`;
+}
+
+/**
+ * Qué ve el acreditado en la página de pago y si hay que seguir consultando al servidor.
+ * Un cobro pagado cuyo recibo todavía no llega NO se muestra como pendiente (ya no hay nada que pagar): se dice que el
+ * pago se recibió y se sigue consultando hasta tener el recibo.
+ * @returns {{vista: "pendiente" | "recibo" | "confirmando" | "vencido", seguir: boolean}}
+ */
+export function pantallaDePago(estado, tieneRecibo) {
+  if (estado === "pagado") return tieneRecibo ? { vista: "recibo", seguir: false } : { vista: "confirmando", seguir: true };
+  if (estado === "vencido") return { vista: "vencido", seguir: false };
+  return { vista: "pendiente", seguir: true };
+}
+
+/**
+ * Huella de un pago de la lista pública de la demo, para reconocer después si llegó uno nuevo cuando el canal en vivo
+ * no estaba conectado. Sin pago, la huella es "".
+ */
+export function huellaDePago(pago) {
+  return pago ? `${pago.fecha}|${pago.claveRastreo ?? ""}|${pago.montoCentavos}` : "";
+}
+
 const MIL_PESOS = 100_000; // en centavos
 
 /** Etiqueta corta para la gráfica de la semana: pesos enteros, o miles con un decimal a partir de $1,000. */

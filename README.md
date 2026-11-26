@@ -16,7 +16,7 @@ Cobranza con CoDi para financieras: el gestor cobra en campo sin efectivo y cada
 
 | Estado | |
 |---|---|
-| Software | Desplegado en Cloudflare (Worker, D1, Durable Object y cron). 98 pruebas unitarias y 31 de punta a punta en verde |
+| Software | Desplegado en Cloudflare (Worker, D1, Durable Object y cron). 101 pruebas unitarias y 31 de punta a punta en verde |
 | Demo pública | Funcionando en **modo simulación**: recorre el camino completo (cobro, aviso firmado, conciliación y cuadre) con pagos de mentira, rotulados como simulados |
 | Pagos CoDi reales | **Pendiente.** Las bases piden una API key de pey por proyecto y la de Qadra aún no se configura. El código del cobro real está escrito contra la versión 2026-10-20 del API y pasa a cobros reales al configurar la llave, pero **todavía no se ha probado con un pago real** |
 | Cartera | Ficticia. "Financiera Jacaranda", sus créditos y sus acreditados son inventados para la demo |
@@ -187,7 +187,7 @@ npm run dev                        # http://localhost:8790
 - **Pruebas:**
 
 ```bash
-npm test          # 98 pruebas unitarias: firma, lectura del aviso, conciliación, CSV, fechas, cobros, validaciones y reglas del navegador
+npm test          # 101 pruebas unitarias: firma, lectura del aviso, conciliación, CSV, fechas, cobros, validaciones y reglas del navegador
 npm run e2e       # 31 pruebas de punta a punta contra npm run dev (en otra terminal)
 npm run typecheck # tipos de TypeScript contra los bindings de Cloudflare
 ```

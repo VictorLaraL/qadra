@@ -1,8 +1,9 @@
 // Landing: la demo en vivo. Un "teléfono" muestra el crédito de ejemplo con su QR CoDi fijo de un centavo;
 // cuando alguien lo paga, pey avisa al Worker, el pago se concilia y aquí se ve "Pagado" al instante.
 
-import { $, aviso, crearApi, direccionWs, enVivo, esc, hora, isotipo, NOMBRE_DE_MEDIO, pesos, sonarPagado } from "/comun.js";
+import { $, aviso, crearApi, direccionWs, enVivo, esc, hora, isotipo, NOMBRE_DE_MEDIO, PALOMITA, pesos, sonarPagado } from "/comun.js";
 import { descargarPng, svgQr } from "/qr.js";
+import { huellaDePago } from "/reglas.js";
 
 const api = crearApi();
 const cuerpo = $("#td-cuerpo");
@@ -12,8 +13,7 @@ let ultimoPago = null;
 let regreso = 0;
 let conectado = false; // si el canal en vivo está abierto; se declara aquí porque los botones lo consultan
 
-const palomita = '<svg viewBox="0 0 52 52" aria-hidden="true"><polyline points="12,27 22,37 40,17"/></svg>';
-const marca = () => `${isotipo(30, { claro: true })}<span><b>Qadra</b><small>Cobranza Inteligente</small></span>`;
+const marca =() => `${isotipo(30, { claro: true })}<span><b>Qadra</b><small>Cobranza Inteligente</small></span>`;
 $("#marca-nav").innerHTML = marca();
 $("#marca-pie").innerHTML = marca();
 $("#td-logo").innerHTML = isotipo(24, { claro: true });
@@ -42,7 +42,7 @@ function pintarTelefono() {
     // El número de cuota llega por el canal en vivo: solo se escribe en la página si de verdad es un número.
     const cuota = Number.isInteger(ultimoPago.cuota) && ultimoPago.cuota > 0 ? ultimoPago.cuota : null;
     cuerpo.innerHTML = `<div class="td-pagado">
-      <div class="palomita">${palomita}</div>
+      <div class="palomita">${PALOMITA}</div>
       <b class="td-titulo">Pagado</b>
       <p class="monto">${pesos(ultimoPago.montoCentavos)} con CoDi · ${esc(hora(ultimoPago.fecha))}</p>
       <dl>
@@ -109,17 +109,21 @@ function alPagar(pago) {
 
 const ESPERA_CON_CANAL_MS = 2500; // margen para que "Pagado" llegue solo por el canal en vivo
 const ESPERA_SIN_CANAL_MS = 600; // sin canal no hay a quién esperar: se consulta casi de inmediato
-const huella = (pago) => (pago ? `${pago.fecha}|${pago.claveRastreo ?? ""}|${pago.montoCentavos}` : "");
+const RESPALDO_MS = 10_000; // cada cuánto se pone al día la página mientras el canal en vivo está caído
+
+/** Lo que se sabe de la demo en este momento: el último pago (para reconocer uno nuevo) y la cuota a la que se abona. */
+const fotoDeLaDemo = () => ({ cargada: Boolean(demo), huella: huellaDePago(demo?.ultimos?.[0]), cuota: demo?.credito?.cuota?.numero ?? null });
 
 /**
- * Respaldo del botón de simular. "Pagado" llega normalmente por el canal en vivo; si no llegó, se consulta la demo y
- * se muestra el pago solo si de verdad hay uno nuevo (distinto del último que ya estaba antes de simular).
+ * Respaldo del canal en vivo. "Pagado" llega normalmente por el canal; cuando no está (se cayó, o el navegador lo cerró
+ * mientras la persona pagaba en la app de su banco), se consulta la demo y se muestra "Pagado" solo si de verdad
+ * apareció un pago que no estaba en la foto de antes.
  */
-async function confirmarSinCanal(antes) {
-  if (vista !== "qr") return; // el canal en vivo ya lo mostró, o la persona se fue a otra pantalla
+async function buscarPagoNuevo(antes = fotoDeLaDemo()) {
   await cargar();
   const ultimo = demo?.ultimos?.[0];
-  if (vista !== "qr" || !ultimo || huella(ultimo) === antes.huella) return;
+  if (!antes.cargada || !ultimo || huellaDePago(ultimo) === antes.huella) return;
+  if (vista === "pagado" && huellaDePago(ultimoPago) === huellaDePago(ultimo)) return; // ese pago ya está en pantalla
   alPagar({ ...ultimo, cuota: antes.cuota });
 }
 
@@ -140,11 +144,11 @@ cuerpo.addEventListener("click", async (evento) => {
   if (accion === "simular") {
     boton.disabled = true;
     boton.textContent = "Simulando el pago…";
-    // Lo que había antes de simular: el último pago (para reconocer el nuevo) y la cuota a la que se va a abonar.
-    const antes = { huella: huella(demo.ultimos?.[0]), cuota: demo.credito?.cuota?.numero ?? null };
+    const antes = fotoDeLaDemo(); // lo que había antes de simular
     try {
       await api("/api/demo/simular", { metodo: "POST" });
-      setTimeout(() => confirmarSinCanal(antes), conectado ? ESPERA_CON_CANAL_MS : ESPERA_SIN_CANAL_MS);
+      // Si "Pagado" no llegó por el canal en vivo, se busca el pago nuevo consultando.
+      setTimeout(() => vista === "qr" && buscarPagoNuevo(antes), conectado ? ESPERA_CON_CANAL_MS : ESPERA_SIN_CANAL_MS);
     } catch (error) {
       aviso(error.message, "mal");
       boton.disabled = false;
@@ -167,8 +171,10 @@ enVivo(
     $("#estado-demo").textContent = estado ? "En vivo" : "Reconectando…";
   },
 );
-// Respaldo: si el canal en vivo se cae, la página se pone al día cada 10 segundos.
+// Respaldo: mientras el canal en vivo esté caído, la página se pone al día sola y muestra "Pagado" si llegó un pago.
 setInterval(() => {
-  if (!conectado && !document.hidden) cargar();
-}, 10_000);
-document.addEventListener("visibilitychange", () => !document.hidden && cargar());
+  if (!conectado && !document.hidden) buscarPagoNuevo();
+}, RESPALDO_MS);
+// Al volver a la pestaña (por ejemplo, después de pagar en la app del banco en el mismo celular) el canal pudo haberse
+// cerrado: se consulta de inmediato para no dejar a la persona viendo "Esperando el pago…".
+document.addEventListener("visibilitychange", () => !document.hidden && buscarPagoNuevo());

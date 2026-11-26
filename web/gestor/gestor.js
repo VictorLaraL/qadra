@@ -1,9 +1,9 @@
 // App del gestor de campo: ruta del día, ficha del crédito, cobro con CoDi y visita registrada.
 // Una sola página; lo que se ve depende de `e.vista`. Los datos vienen de /api/app (ver src/worker/app.ts).
 
-import { $, aviso, copiar, crearApi, diaLargo, direccionWs, enVivo, esc, hora, isotipo, NOMBRE_DE_VISITA, pesos, plural, situacion, sonarPagado } from "/comun.js";
+import { $, aviso, copiar, crearApi, diaLargo, direccionWs, enVivo, esc, hora, isotipo, NOMBRE_DE_VISITA, PALOMITA, pesos, plural, situacion, sonarPagado } from "/comun.js";
 import { descargarPng, svgQr } from "/qr.js";
-import { aCentavos, destinoDeVisitaEnCola, estadoDeCuota } from "/reglas.js";
+import { aCentavos, cuotasPagadas, destinoDeVisitaEnCola, estadoDeCuota } from "/reglas.js";
 
 const app = $("#app");
 
@@ -55,7 +55,8 @@ let reloj = 0;
 
 // ------------------------------------------------------------------ Piezas de pantalla
 const flecha = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
-const palomita = '<svg viewBox="0 0 52 52" aria-hidden="true"><polyline points="12,27 22,37 40,17"/></svg>';
+// Con tope de demo los cobros son reales: se ofrece el abono más chico que acepta CoDi, para probar sin gastar.
+const ABONO_DE_PRUEBA_CENTAVOS = 1;
 
 function cinta() {
   if (!e.sesion) return "";
@@ -235,7 +236,7 @@ function opcionesDeMonto() {
   const est = e.ficha.credito.estado;
   const tope = e.sesion.topeCentavos;
   const lista = [];
-  if (tope > 0) lista.push({ id: "prueba", nombre: "Abono de prueba", centavos: 1 });
+  if (tope > 0) lista.push({ id: "prueba", nombre: "Abono de prueba", centavos: ABONO_DE_PRUEBA_CENTAVOS });
   if (est.exigibleCentavos > 0) lista.push({ id: "exigible", nombre: "Lo exigible hoy", centavos: est.exigibleCentavos });
   if (est.cuotaActual && est.cuotaActual.pendienteCentavos !== est.exigibleCentavos) {
     lista.push({ id: "cuota", nombre: `Lo que falta de la cuota ${est.cuotaActual.numero}`, centavos: est.cuotaActual.pendienteCentavos });
@@ -305,6 +306,16 @@ function hojaGestores() {
     <button type="button" class="enlace centro" data-accion="cerrar-hoja">Cerrar</button></div>`;
 }
 
+/** Salir con visitas sin enviar: la persona decide si se queda (se envían solas) o si sale y se borran. */
+function hojaSalida() {
+  const n = e.cola.length;
+  return `<div class="velo" data-accion="cerrar-hoja"></div>
+  <div class="hoja" role="dialog" aria-label="Visitas sin enviar"><h3>${n === 1 ? "Hay 1 visita sin enviar" : `Hay ${n} visitas sin enviar`}</h3>
+    <p class="nota">No se pudieron enviar en este momento. Si te quedas, se envían solas al recuperar la señal. Si sales, se borran de este teléfono para que no las envíe la siguiente persona que lo use.</p>
+    <button class="boton ancho" data-accion="cerrar-hoja">Quedarme</button>
+    <button type="button" class="enlace centro" data-accion="salir-borrando">Salir y borrar ${n === 1 ? "la visita" : "las visitas"}</button></div>`;
+}
+
 function vistaCobro() {
   const c = e.cobro;
   const f = e.ficha.credito;
@@ -342,11 +353,11 @@ function vistaPagado() {
   const aplicado = !ultima
     ? "Pago recibido. Queda por revisar en el portal."
     : ultima.liquida && r.restaCuotaCentavos === 0
-      ? `Cuota${r.cuotas.length > 1 ? "s" : ""} ${r.cuotas.map((q) => q.numero).join(" y ")} pagada${r.cuotas.length > 1 ? "s" : ""} completa${r.cuotas.length > 1 ? "s" : ""}`
+      ? cuotasPagadas(r.cuotas.map((q) => q.numero))
       : `Abono a la cuota ${ultima.numero} · faltan ${pesos(r.restaCuotaCentavos)}`;
   return `${barra("Ruta de hoy", { derecha: e.ruta ? `<span class="barra-progreso">${e.ruta.resumen.hechas} de ${e.ruta.resumen.total}</span>` : "" })}${cinta()}
     <section class="pagado">
-      <div class="palomita">${palomita}</div>
+      <div class="palomita">${PALOMITA}</div>
       <h2>Pagado</h2>
       <p class="pagado-monto monto">${pesos(r.montoCentavos)} con CoDi · ${esc(hora(r.fecha))}</p>
       <p class="pagado-quien">${esc(f.acreditado)} · Crédito ${esc(f.id)}</p>
@@ -365,7 +376,7 @@ function vistaPagado() {
 
 function pintar() {
   const vistas = { entrada: vistaEntrada, ruta: vistaRuta, ficha: vistaFicha, cobro: vistaCobro, pagado: vistaPagado };
-  const hojas = { cobrar: hojaCobrar, visita: hojaVisita, gestores: hojaGestores };
+  const hojas = { cobrar: hojaCobrar, visita: hojaVisita, gestores: hojaGestores, salida: hojaSalida };
   if (e.vista === "cargando") return;
   // La pantalla es la que se desplaza; las hojas se quedan fijas sobre ella, dentro del marco del teléfono.
   const mismaVista = app.dataset.vista === e.vista;
@@ -543,8 +554,10 @@ function olvidarSesion() {
 }
 
 /**
- * Cierra la sesión y borra del teléfono la clave, la sesión y la ruta.
- * Las visitas sin enviar NO se borran: son evidencia del trabajo del gestor y se envían al volver a entrar.
+ * Cierra la sesión y borra del teléfono la clave, la sesión y la ruta. La cola de visitas no se toca aquí:
+ * - en una salida forzada (la clave dejó de servir) se conserva, porque la misma persona vuelve a entrar y son evidencia
+ *   de su trabajo;
+ * - en la salida que pide la persona, cerrarSesion ya la envió o le preguntó antes de borrarla.
  */
 function salir(mensaje = "") {
   canal?.cerrar();
@@ -557,19 +570,24 @@ function salir(mensaje = "") {
   pintar();
 }
 
-/** La salida que pide la persona: antes se intenta mandar lo que esté en la cola, y se le dice si algo quedó. */
+/**
+ * La salida que pide la persona. Antes se intenta mandar lo que esté en la cola; si algo no se pudo enviar, se le
+ * pregunta: en un teléfono compartido, las visitas de una persona no deben salir con la clave de la siguiente.
+ */
 async function cerrarSesion() {
   await enviarCola();
   if (!e.sesion) return; // la sesión se cerró sola mientras se enviaba (clave vencida)
-  const pendientes = e.cola.length;
-  salir();
-  if (pendientes) {
-    aviso(
-      pendientes === 1
-        ? "1 visita queda guardada en este teléfono y se envía al volver a entrar."
-        : `${pendientes} visitas quedan guardadas en este teléfono y se envían al volver a entrar.`,
-    );
+  if (e.cola.length) {
+    e.hoja = "salida";
+    return pintar();
   }
+  salir();
+}
+
+function salirBorrandoLaCola() {
+  e.cola = [];
+  guardar(LLAVE.cola, e.cola);
+  salir();
 }
 
 // ------------------------------------------------------------------ Cobro
@@ -746,6 +764,7 @@ async function vaciarCola() {
   if (rechazadas) aviso(rechazadas === 1 ? "El servidor rechazó 1 visita guardada: no se registró." : `El servidor rechazó ${rechazadas} visitas guardadas: no se registraron.`, "mal");
   if (!e.sesion) return;
   if (claveVencida) return salir(`${CLAVE_VENCIDA} Tus visitas siguen guardadas en este teléfono.`);
+  if (e.hoja === "salida" && !e.cola.length) e.hoja = null; // ya no hay nada que preguntar antes de salir
   if (enviadas) cargarRuta({ silencio: true });
   if (e.vista === "ruta") pintar();
   else refrescarEstado();
@@ -770,6 +789,7 @@ const acciones = {
     el.disabled = true;
     cerrarSesion();
   },
+  "salir-borrando": salirBorrandoLaCola,
   abrir: (el) => abrirFicha(el.dataset.id),
   volver: () => {
     if (e.vista === "cobro") return ir("ficha"), abrirFichaSilenciosa();

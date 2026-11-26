@@ -39,6 +39,9 @@ export function isotipo(tamano = 32, { claro = false } = {}) {
   );
 }
 
+/** La palomita animada de "Pagado" (la dibuja .palomita en estilos.css). */
+export const PALOMITA = '<svg viewBox="0 0 52 52" aria-hidden="true"><polyline points="12,27 22,37 40,17"/></svg>';
+
 export class ErrorApi extends Error {
   constructor(status, mensaje) {
     super(mensaje);

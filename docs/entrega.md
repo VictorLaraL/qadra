@@ -158,7 +158,7 @@ npm run dev
   `/webhooks/pey` que usa pey. Todo lo simulado dice SIMULADO.
 - En el portal, **Conciliación** trae dos pruebas: **Simular un aviso de pago que se pierde** (el cuadre lo detecta y
   **Recuperar** lo trae) y **Simular transferencia sin referencia** (queda por revisar y se asigna a un crédito).
-- Pruebas automáticas: `npm test` (98 unitarias) y `npm run e2e` con `npm run dev` corriendo en otra terminal (31 de
+- Pruebas automáticas: `npm test` (101 unitarias) y `npm run e2e` con `npm run dev` corriendo en otra terminal (31 de
   punta a punta: firmas, pagos repetidos y simultáneos, excepciones, cuadre, canal en vivo y carga de cartera).
 
 **Dónde mirar en el código:** `src/worker/pey.ts` (llamadas a pey), `src/worker/cobros.ts` (el cobro se guarda antes de

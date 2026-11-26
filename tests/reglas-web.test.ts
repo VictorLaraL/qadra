@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 // Reglas del navegador que no dependen de la página: se prueban aquí igual que el núcleo del servidor.
-import { aCentavos, destinoDeVisitaEnCola, estadoDeCuota, etiquetaDeBarra } from "../web/reglas.js";
+import { aCentavos, cuotasPagadas, destinoDeVisitaEnCola, estadoDeCuota, etiquetaDeBarra, huellaDePago, pantallaDePago } from "../web/reglas.js";
 
 test("aCentavos del formulario: acepta pesos con o sin centavos y rechaza lo demás", () => {
   assert.equal(aCentavos("450"), 45_000);
@@ -28,6 +28,29 @@ test("el estado de una cuota sale de una sola regla, para el color y para el tex
   assert.deepEqual(cuota(0, "2026-11-18"), { clase: "vencida", texto: "vencida" });
   assert.deepEqual(cuota(0, "2026-11-25"), { clase: "hoy", texto: "vence hoy" });
   assert.deepEqual(cuota(0, "2026-12-02"), { clase: "", texto: "por vencer" });
+});
+
+test("el texto de cuotas pagadas concuerda en número y arma la lista como se dice en español", () => {
+  assert.equal(cuotasPagadas([7]), "Cuota 7 pagada completa");
+  assert.equal(cuotasPagadas([7, 8]), "Cuotas 7 y 8 pagadas completas");
+  assert.equal(cuotasPagadas([7, 8, 9]), "Cuotas 7, 8 y 9 pagadas completas");
+});
+
+test("la página de pago nunca muestra como pendiente un cobro ya pagado, aunque el recibo tarde en llegar", () => {
+  assert.deepEqual(pantallaDePago("pendiente", false), { vista: "pendiente", seguir: true });
+  assert.deepEqual(pantallaDePago("pagado", true), { vista: "recibo", seguir: false });
+  // Pagado sin recibo todavía: ya no hay nada que pagar, así que no se enseña el QR; se sigue consultando.
+  assert.deepEqual(pantallaDePago("pagado", false), { vista: "confirmando", seguir: true });
+  assert.deepEqual(pantallaDePago("vencido", false), { vista: "vencido", seguir: false });
+});
+
+test("un pago nuevo se reconoce porque su huella cambia; sin pago no hay huella", () => {
+  const pago = { fecha: "2026-11-25T16:00:00.000Z", claveRastreo: "SIMAB1…22CD", montoCentavos: 1 };
+  assert.equal(huellaDePago(pago), huellaDePago({ ...pago, banco: "Santander" }));
+  assert.notEqual(huellaDePago(pago), huellaDePago({ ...pago, fecha: "2026-11-25T16:00:05.000Z" }));
+  assert.notEqual(huellaDePago(pago), huellaDePago({ ...pago, claveRastreo: "SIMZZ9…00AA" }));
+  assert.equal(huellaDePago(null), "");
+  assert.equal(huellaDePago(undefined), "");
 });
 
 test("la etiqueta de la gráfica abrevia en miles solo a partir de mil pesos", () => {

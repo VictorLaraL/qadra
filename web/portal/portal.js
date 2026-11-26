@@ -281,10 +281,10 @@ function panelDeCredito() {
     ...f.pagos.map((p) => ({ fecha: p.fechaPago, html: `<b class="monto">${pesos(p.montoCentavos)}</b> ${p.estado === "aplicado" ? `aplicado a ${cuotasDe(p).toLowerCase()}` : "por revisar"} ${etiquetaDeOrigen(p)}` })),
     ...f.gestiones.filter((g) => g.resultado !== "pago").map((g) => ({ fecha: g.creadoEn, html: `<b>${esc(NOMBRE_DE_VISITA[g.resultado] ?? g.resultado)}</b>${g.promesaCentavos ? ` ${pesos(g.promesaCentavos)} para el ${esc(g.promesaFecha)}` : ""}${g.gestor ? ` · ${esc(g.gestor)}` : ""}${g.nota ? `<small>${esc(g.nota)}</small>` : ""}` })),
   ].sort((a, b) => b.fecha.localeCompare(a.fecha));
-  return `<div class="velo" data-accion="cerrar-panel"></div>
+  return `<div class="velo" data-accion="cerrar-capa"></div>
   <aside class="panel" role="dialog" aria-label="Crédito ${esc(c.id)}">
     <header><div><span class="etiqueta ${s.clase}">${esc(s.texto)}</span><h2>${esc(c.acreditado)}</h2><p class="nota">Crédito ${esc(c.id)} · ${esc(c.producto)}${c.grupo ? ` · Grupo ${esc(c.grupo)}` : ""}</p></div>
-      <button class="cerrar" data-accion="cerrar-panel" aria-label="Cerrar">×</button></header>
+      <button class="cerrar" data-accion="cerrar-capa" aria-label="Cerrar">×</button></header>
     <div class="panel-cifras">
       <div><small>Exigible hoy</small><b class="monto">${pesos(c.estado.exigibleCentavos)}</b></div>
       <div><small>Saldo</small><b class="monto">${pesos(c.estado.saldoCentavos)}</b></div>
@@ -509,13 +509,13 @@ async function descargar(ruta, nombre) {
 // ------------------------------------------------------------------ Asignar una excepción
 
 function dialogoAsignar(tx, montoCentavos) {
-  capa.innerHTML = `<div class="velo" data-accion="cerrar-panel"></div>
+  capa.innerHTML = `<div class="velo" data-accion="cerrar-capa"></div>
     <div class="dialogo" role="dialog" aria-label="Asignar pago">
       <h2>Asignar ${pesos(montoCentavos)} a un crédito</h2>
       <p class="nota">Busca el crédito al que corresponde este pago. Se aplica a sus cuotas pendientes, de la más antigua a la más reciente.</p>
       <label class="campo"><span>Crédito</span><input id="buscar-credito" type="search" placeholder="Nombre o número de crédito" autocomplete="off" /></label>
       <ul class="resultados" id="resultados"><li class="nota">Escribe para buscar.</li></ul>
-      <button class="enlace" data-accion="cerrar-panel">Cancelar</button>
+      <button class="enlace" data-accion="cerrar-capa">Cancelar</button>
     </div>`;
   const campo = $("#buscar-credito");
   const resultados = $("#resultados");
@@ -651,7 +651,8 @@ const acciones = {
       e.ficha = ficha;
       pintarPanel();
     }),
-  "cerrar-panel": () => {
+  // Cierra lo que esté en la capa: el panel de un crédito o el diálogo de asignar (botón, fondo o tecla Escape).
+  "cerrar-capa": () => {
     turnoDeFicha++;
     e.ficha = null;
     capa.innerHTML = "";
@@ -690,7 +691,7 @@ document.addEventListener("click", (evento) => {
 });
 
 document.addEventListener("keydown", (evento) => {
-  if (evento.key === "Escape" && capa.innerHTML) acciones["cerrar-panel"]();
+  if (evento.key === "Escape" && capa.innerHTML) acciones["cerrar-capa"]();
   if (evento.key === "Enter" && evento.target.matches?.("tr[data-accion]")) acciones.ficha(evento.target);
 });
 
