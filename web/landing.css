@@ -244,9 +244,15 @@ body.landing {
   gap: 12px;
 }
 
-/* Al cambiar de vista, la pantalla nueva entra con un fundido corto; si solo se actualizan datos, no se anima. */
-.td-cuerpo.entra > * {
+/* Al cambiar de vista, la pantalla nueva entra con un fundido corto; si solo se actualizan datos, no se anima.
+   En "Pagado" el disco trae su propia entrada: el fundido va en el texto, no encima del disco. */
+.td-cuerpo.entra > *,
+.td-cuerpo.entra > .td-pagado > :not(.palomita) {
   animation: aparece 0.2s ease-out both;
+}
+
+.td-cuerpo.entra > .td-pagado {
+  animation: none;
 }
 
 /* La acción principal va abajo, como en la app del gestor. */
@@ -488,7 +494,10 @@ body.landing {
   transition: color 0.3s ease;
 }
 
+/* El área que se puede tocar mide 44 px de alto aunque el texto sea chico; el margen negativo evita que cambie la tarjeta. */
 .td-oficina-ver {
+  padding: 12px 8px;
+  margin: -12px -8px;
   color: var(--sobre-noche-enlace);
   font-weight: 600;
   text-underline-offset: 3px;
@@ -508,7 +517,8 @@ body.landing {
   font-weight: 600;
 }
 
-.td-oficina.llega #oficina-texto {
+/* Los dos renglones (portal con la hora y el pago conciliado) llegan juntos, bajando desde el teléfono. */
+.td-oficina.llega p {
   animation: llega 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -802,7 +812,7 @@ main > section.cierre {
 
 @media (prefers-reduced-motion: reduce) {
   /* El texto de la oficina cambia con un fundido, sin bajar. */
-  .td-oficina.llega #oficina-texto {
+  .td-oficina.llega p {
     animation: aparece 0.2s ease-out both !important;
   }
 }
@@ -826,6 +836,123 @@ main > section.cierre {
   .telefono-demo {
     --alto-pantalla: 486px;
     --lado-qr: 210px;
+  }
+}
+
+/* Ventanas de ~650 px de alto (una laptop de 1366×768 con la barra del navegador): el teléfono se compacta para que la
+   tarjeta de la oficina siga a la vista cuando llega el pago. */
+@media (min-width: 961px) and (max-height: 700px) {
+  .nav {
+    padding-block: 10px;
+  }
+
+  .heroe {
+    padding-top: 4px;
+  }
+
+  .demo {
+    gap: 10px;
+  }
+
+  .telefono-demo {
+    --alto-pantalla: 430px;
+    --lado-qr: 186px;
+    border-width: 8px;
+    border-radius: 32px;
+  }
+
+  .td-barra {
+    padding: 12px 14px 10px;
+  }
+
+  .td-credito.compacto {
+    padding: 8px 12px;
+  }
+
+  .td-cuerpo {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .td-accion .boton {
+    min-height: 44px;
+  }
+
+  .td-esperando {
+    padding: 6px;
+  }
+
+  .td-pagado .palomita {
+    width: 76px;
+    height: 76px;
+  }
+
+  .td-pagado dl div {
+    padding-block: 8px;
+  }
+
+  .td-oficina {
+    padding-block: 10px;
+  }
+}
+
+/* Ventanas de ~600 px (1280×720 con la barra del navegador): todo se compacta, pero nada se esconde: la guía de los tres
+   pasos y el renglón de quién paga y cuánto siguen ahí. */
+@media (min-width: 961px) and (max-height: 620px) {
+  .nav {
+    padding-block: 8px;
+  }
+
+  .demo {
+    gap: 8px;
+  }
+
+  .telefono-demo {
+    --alto-pantalla: 398px;
+    --lado-qr: 164px;
+  }
+
+  .td-instruccion {
+    font-size: 0.82rem;
+  }
+
+  .td-barra {
+    padding: 10px 14px 8px;
+  }
+
+  /* En reposo el crédito muestra nombre y cuota; el avance de la cuota se ve en la app y en el portal. */
+  .td-credito:not(.compacto) .avance,
+  .td-credito:not(.compacto) .monto {
+    display: none;
+  }
+
+  .td-credito.compacto {
+    padding: 6px 12px;
+  }
+
+  .td-pasos {
+    gap: 8px;
+  }
+
+  .td-pasos li {
+    font-size: 0.84rem;
+  }
+
+  .td-esperando {
+    padding: 4px;
+  }
+
+  .td-pagado .palomita {
+    width: 64px;
+    height: 64px;
+  }
+
+  .td-pagado dl div {
+    padding-block: 6px;
+  }
+
+  .td-oficina {
+    padding-block: 8px;
   }
 }
 

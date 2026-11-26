@@ -175,5 +175,18 @@ superficies disjuntas para paralelizar.
   que nadie puede usarlo mas que para el hackathon" (`0cfb11a`: LICENSE de uso restringido, README y package.json).
   Se dejaron sin cambiar, con motivo: las fuentes y la trama de cuadras (identidad v2), la tarjeta del crédito dentro
   del teléfono (imita la app real) y la estructura de tarjetas de las secciones (sería rediseño, no corrección).
+- **L18 (2026-11-25) Revisión de movimiento (subagente con el rol de revisor de impeccable), dos rondas:**
+  - Ronda 1 (sobre `ca76b18`): "corregir". En una laptop de 1366×768 la ventana útil es de ~650 px y la tarjeta de la
+    oficina quedaba abajo; la oficina se contaba desde el aviso y no desde que se pinta "Pagado" (con red lenta, o con
+    movimiento reducido, llegaba antes que el teléfono); faltaba evidencia sin recorte de la barra de desplazamiento.
+  - Corrección: "Pagado" se pinta en cuanto llega el aviso; el punto y la oficina arrancan después de ese cuadro (600 ms,
+    200 ms con movimiento reducido); niveles de altura ≤700 px y ≤620 px; el fundido de la vista ya no se suma al del
+    disco; los dos renglones de la oficina llegan juntos; el enlace "Ver" mide 45 px de alto.
+  - Ronda 2: los tres puntos **resueltos** (oficina +608 a +621 ms tras el cuadro de "Pagado" en cinco tamaños, +214 ms
+    con movimiento reducido; oficina dentro de la ventana en 1366×657 y 1280×600; punto quieto a los 5 s y en pausa
+    fuera de vista; cero saltos). Encontró dos regresiones en ≤620 px (franja vacía al esconder la guía y QR sin nombre
+    ni monto). Se corrigieron compactando en vez de esconder y se verificaron con medición propia, no con una tercera
+    ronda (impeccable pide máximo dos): 1280×600 sin desbordes, guía y renglón visibles, oficina a 590/600 (10 px de
+    margen, el revisor pedía 16), QR de 164 px solo en ese nivel. Celular 390×844 medido: misma secuencia, sin saltos.
 - **L16 (2026-11-25):** "Sí, pasar a main". `main` avanza directo (sin commit de fusión) hasta `feat/demo-hackaton`,
   igual que en Sin Morralla: quien abre el repositorio ve la demo completa.

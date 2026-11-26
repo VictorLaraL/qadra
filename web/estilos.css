@@ -22,6 +22,12 @@
   --marco-telefono: #1c2740;
   --marco-telefono-borde: #2c3a5c;
   --azul-texto: #173bb0;
+  /* Botones con el puntero encima y borde de los campos */
+  --electrico-encima: #1d48cf;
+  --esmeralda-encima: #14b072;
+  --azul-suave-encima: #dbe5fd;
+  --blanco-encima: #f3f5f9;
+  --borde-campo: #c9cfda;
   /* Estados */
   --verde-texto: #0e7a4e;
   --verde-suave: #e6f8f0;
@@ -188,7 +194,7 @@ html {
 }
 
 .boton:hover {
-  background: #1d48cf;
+  background: var(--electrico-encima);
 }
 
 .boton:active {
@@ -207,7 +213,7 @@ html {
 }
 
 .boton.secundario:hover {
-  background: #f3f5f9;
+  background: var(--blanco-encima);
 }
 
 .boton.suave {
@@ -216,7 +222,7 @@ html {
 }
 
 .boton.suave:hover {
-  background: #dbe5fd;
+  background: var(--azul-suave-encima);
 }
 
 .boton.verde {
@@ -225,7 +231,7 @@ html {
 }
 
 .boton.verde:hover {
-  background: #14b072;
+  background: var(--esmeralda-encima);
 }
 
 .boton.chico {
@@ -322,7 +328,7 @@ html {
   width: 100%;
   min-height: 48px;
   padding: 10px 14px;
-  border: 1.5px solid #c9cfda;
+  border: 1.5px solid var(--borde-campo);
   border-radius: var(--radio-chico);
   background: var(--blanco);
 }

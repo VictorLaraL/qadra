@@ -17,6 +17,8 @@ let conectado = false; // si el canal en vivo está abierto; se declara aquí po
 
 // "Pagado" se dibuja en ~650 ms (estilos.css: brota y traza); la oficina recibe el pago justo al terminar.
 const OFICINA_TRAS_PAGADO_MS = 600;
+// Con movimiento reducido "Pagado" llega con un fundido de 200 ms: la oficina va después, sin moverse.
+const OFICINA_REDUCIDO_MS = 200;
 
 // ------------------------------------------------------------------ Teléfono
 
@@ -119,7 +121,11 @@ $("#pulso-demo").addEventListener("animationend", (evento) => evento.currentTarg
 // ------------------------------------------------------------------ La oficina
 
 let oficinaEspera = 0;
-/** La tarjeta de la oficina recibe el pago cuando "Pagado" termina de dibujarse. */
+/**
+ * La tarjeta de la oficina recibe el pago cuando "Pagado" termina de dibujarse. El tiempo se cuenta desde que el
+ * teléfono ya pintó "Pagado" (no desde que llegó el aviso), así el orden teléfono → oficina no depende de la red.
+ * Con movimiento reducido no hay dibujo que esperar, pero se conserva el orden con el fundido de "Pagado" (200 ms).
+ */
 function oficinaRecibe(pago) {
   clearTimeout(oficinaEspera);
   const r = resumenDelPago(pago);
@@ -132,9 +138,12 @@ function oficinaRecibe(pago) {
       void oficina.offsetWidth;
       oficina.classList.add("llega");
     },
-    movimientoReducido.matches ? 0 : OFICINA_TRAS_PAGADO_MS,
+    movimientoReducido.matches ? OFICINA_REDUCIDO_MS : OFICINA_TRAS_PAGADO_MS,
   );
 }
+
+/** Corre `accion` en el cuadro siguiente al que pinta lo que se acaba de poner en la página. */
+const trasPintar = (accion) => requestAnimationFrame(() => requestAnimationFrame(accion));
 
 // El resaltado de la fila nueva dura 6 s: se guarda hasta que "Conciliación en vivo" esté a la vista, para que no pase
 // mientras nadie la mira (en escritorio la tarjeta queda abajo del teléfono).
@@ -198,11 +207,16 @@ function alPagar(pago) {
   ultimoPago = pago;
   anunciado = huellaDePago(pago);
   vista = "pagado";
+  // "Pagado" se pinta de inmediato con lo que trajo el aviso: no espera a la consulta de la demo, que puede tardar o
+  // fallar. El punto "En vivo" y la oficina reaccionan después de ese cuadro, en ese orden.
+  pintarTelefono();
   sonarPagado();
-  latir();
   anunciar(resumenDelPago(pago).anuncio);
-  oficinaRecibe(pago);
-  cargar({ nuevo: true });
+  trasPintar(() => {
+    latir();
+    oficinaRecibe(pago);
+  });
+  cargar({ nuevo: true }); // pone al día los contadores y la lista de la oficina
 }
 
 const ESPERA_CON_CANAL_MS = 2500; // margen para que "Pagado" llegue solo por el canal en vivo
