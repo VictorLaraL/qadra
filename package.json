@@ -1,6 +1,7 @@
 {
   "name": "qadra",
   "private": true,
+  "license": "UNLICENSED",
   "version": "0.1.0",
   "description": "Cobranza inteligente con CoDi: el gestor cobra en campo sin efectivo y cada pago se concilia solo.",
   "type": "module",

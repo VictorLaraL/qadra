@@ -1,0 +1,37 @@
+Qadra — Licencia de uso restringido
+
+Copyright (c) 2026 Victor Lara (https://github.com/VictorLaraL). Todos los derechos reservados.
+
+Este repositorio es público solo para que el proyecto se pueda evaluar en el Hackatón México 2026. Que el código esté a
+la vista no lo convierte en software libre ni de código abierto.
+
+1. Titularidad. El código fuente, la documentación, los diseños, la identidad visual, el nombre y el logotipo de Qadra
+   (en conjunto, "el Proyecto") son propiedad de su autor.
+
+2. Permiso limitado. Se permite, sin costo, consultar, clonar y ejecutar el Proyecto en un equipo propio con el único
+   fin de evaluarlo o revisarlo dentro del Hackatón México 2026. El permiso es para los organizadores del hackatón, su
+   jurado y las personas que revisen el proyecto como parte del hackatón, y dura hasta la publicación de los resultados.
+
+3. Lo que no se permite. Fuera del permiso anterior, nadie puede, sin autorización previa y por escrito del autor:
+   a) usar el Proyecto, o cualquier parte de él, en otro producto o servicio, con o sin fines de lucro;
+   b) copiarlo, modificarlo, adaptarlo o crear obras derivadas;
+   c) distribuirlo, publicarlo, sublicenciarlo, venderlo, rentarlo u ofrecerlo como servicio;
+   d) usar el nombre o el logotipo de Qadra.
+
+4. GitHub. Los términos de servicio de GitHub permiten ver este repositorio y hacer un fork dentro de GitHub. Eso no
+   concede ningún otro derecho sobre el Proyecto: un fork queda sujeto a esta misma licencia.
+
+5. Bases del hackatón. Esta licencia no limita los derechos que las bases del Hackatón México 2026 otorgan a sus
+   organizadores sobre los materiales de la postulación.
+
+6. Componentes de terceros. Cada componente de terceros conserva su propia licencia, que es la que aplica a ese
+   componente: qrcode-generator 1.4.4 de Kazuhiko Arase (licencia MIT), en web/vendor/qrcode-1.4.4.js, y las
+   dependencias de npm declaradas en package.json.
+
+7. Sin garantía. El Proyecto se entrega "tal cual", sin garantía de ningún tipo. El autor no responde por daños que
+   resulten de su uso.
+
+8. Otros usos. Para pedir autorización de cualquier otro uso, contacta al autor por GitHub:
+   https://github.com/VictorLaraL.
+
+CoDi® es una marca registrada de Banco de México. Qadra no está afiliado a Banco de México.

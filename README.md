@@ -303,6 +303,9 @@ Para cumplir con la declaración de código previo de las bases:
 
 ## Licencia
 
-Todos los derechos reservados. El código es público para la evaluación del hackatón.
+Licencia de uso restringido, todos los derechos reservados: ver [LICENSE](LICENSE). El repositorio es público solo
+para la evaluación del Hackatón México 2026. Nadie puede usar, copiar, modificar ni distribuir el código, los diseños
+ni la marca Qadra sin autorización escrita del autor. Los componentes de terceros conservan su licencia
+(qrcode-generator, MIT).
 
 CoDi® es una marca registrada de Banco de México. Qadra no está afiliado a Banco de México.
