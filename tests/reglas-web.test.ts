@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 // Reglas del navegador que no dependen de la página: se prueban aquí igual que el núcleo del servidor.
-import { aCentavos, cuotasPagadas, destinoDeVisitaEnCola, esDeOtraSesion, estadoDeCuota, etiquetaDeBarra, huellaDePago, pantallaDePago } from "../web/reglas.js";
+import { aCentavos, cuotasPagadas, destinoDeVisitaEnCola, esDeOtraSesion, estadoDeCuota, etiquetaDeBarra, huellaDePago, pantallaDePago, resumenDelPago } from "../web/reglas.js";
 
 test("aCentavos del formulario: acepta pesos con o sin centavos y rechaza lo demás", () => {
   assert.equal(aCentavos("450"), 45_000);
@@ -68,6 +68,25 @@ test("un pago nuevo se reconoce porque su huella cambia; sin pago no hay huella"
   assert.notEqual(huellaDePago(pago), huellaDePago({ ...pago, claveRastreo: "SIMZZ9…00AA" }));
   assert.equal(huellaDePago(null), "");
   assert.equal(huellaDePago(undefined), "");
+});
+
+test("el resumen de un pago dice lo mismo en el teléfono, en la oficina y al lector de pantalla", () => {
+  const r = resumenDelPago({ montoCentavos: 1, cuota: 8 });
+  assert.equal(r.cuota, 8);
+  assert.equal(r.aplicado, "Abono a la cuota 8");
+  assert.equal(r.oficina, "$0.01 a la cuota 8");
+  assert.equal(r.anuncio, "Pagado: $0.01 con CoDi, abono a la cuota 8.");
+  // Un pago que no se pudo ligar a una cuota no se presenta como aplicado.
+  const sinCuota = resumenDelPago({ montoCentavos: 45_000, cuota: null });
+  assert.equal(sinCuota.aplicado, "Por revisar");
+  assert.equal(sinCuota.oficina, "$450.00 por revisar");
+  assert.equal(sinCuota.anuncio, "Pagado: $450.00 con CoDi. La oficina lo revisa.");
+});
+
+test("la cuota que llega por el canal en vivo solo se usa si es un número de cuota", () => {
+  for (const malo of [0, -1, 2.5, "8", "8<b>", null, undefined, Number.NaN]) {
+    assert.equal(resumenDelPago({ montoCentavos: 1, cuota: malo }).cuota, null, `con ${String(malo)}`);
+  }
 });
 
 test("la etiqueta de la gráfica abrevia en miles solo a partir de mil pesos", () => {

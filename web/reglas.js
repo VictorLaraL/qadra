@@ -1,6 +1,26 @@
 // Reglas del navegador que no dependen de la página. Viven aparte para poder probarlas con `npm test`
 // (tests/reglas-web.test.ts), igual que el núcleo del servidor.
 
+import { pesos } from "./comun.js";
+
+/** La cuota que llega por el canal en vivo solo se usa si es un número de cuota; si no, el pago queda "por revisar". */
+const cuotaValida = (cuota) => (Number.isInteger(cuota) && cuota > 0 ? cuota : null);
+
+/**
+ * Cómo se dice un pago recibido en la landing: en el teléfono ("Aplicado"), en la tarjeta de la oficina y en el aviso
+ * para lector de pantalla. Una sola regla para los tres, así no se contradicen.
+ */
+export function resumenDelPago(pago) {
+  const monto = pesos(pago.montoCentavos);
+  const cuota = cuotaValida(pago.cuota);
+  return {
+    cuota,
+    aplicado: cuota ? `Abono a la cuota ${cuota}` : "Por revisar",
+    oficina: cuota ? `${monto} a la cuota ${cuota}` : `${monto} por revisar`,
+    anuncio: cuota ? `Pagado: ${monto} con CoDi, abono a la cuota ${cuota}.` : `Pagado: ${monto} con CoDi. La oficina lo revisa.`,
+  };
+}
+
 /**
  * Convierte a centavos lo que la persona escribe en un campo de monto: "450", " $1,250.50 ".
  * Regresa null si no es una cantidad mayor que cero con hasta dos decimales.

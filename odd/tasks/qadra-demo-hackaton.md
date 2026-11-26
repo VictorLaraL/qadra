@@ -20,6 +20,10 @@ Rama: `feat/demo-hackaton` · Entrega: `single-pr` (mismo criterio que Sin Morra
 - **S6. Método.** "aplica ODD y RDD para asegurar la calidad de la demo".
 - **S7. Orden.** "si no estoy loggeado localmente en github con mi usuario de victor lara deja para el final subir el
   repo, prioriza hacer la demo slocalmente y subirla a cloudflare".
+- **S8. Correcciones de la auditoría de impeccable (2026-11-25).** "aplica todas las correcciones tanto p1 hasta p3
+  aplica todos y al final dame un resumen y sube la pagina para ver que tal quedo". Alcance: los 11 hallazgos de la
+  auditoría de la landing (`.impeccable/audit/`, 13/20), con las guías de impeccable (harden, layout, animate, optimize,
+  distill, typeset y polish). Se respetan las fuentes y la trama de la identidad v2; no se rediseñan las secciones.
 
 ## Tasks
 
@@ -35,6 +39,7 @@ Rama: `feat/demo-hackaton` · Entrega: `single-pr` (mismo criterio que Sin Morra
 | T8 | S5, S6 | inline | hecho | Unitarias 103/103, e2e 31/31, `tsc` limpio; servidor local en el puerto 8790. Advertencias de RDD de la interfaz en `4a7c6fe`, `a625d04` y `36d623b` (L12 a L14) |
 | T9 | S2, S3 | inline | hecho | `README.md` con un diagrama Mermaid, `docs/entrega.md` (descripción 483 palabras, instrucciones 606) |
 | T10 | S4, S7 | inline | hecho | D1 `qadra` (WNAM) con migraciones 0001 y 0002; Worker en https://qadra.victormlaralopez.workers.dev. En producción: landing, app, portal y página de pago 200; clave `demo` da rol jurado; cobro → pago simulado → pagado; cuadre con el libro simulado "cuadra" |
+| T12 | S8, S5, S6 | inline | hecho | RED: `resumenDelPago` inexistente; GREEN 105/105 unitarias y 31/31 e2e, `tsc` limpio. Detector de impeccable: de 15 hallazgos a 3, los tres decisiones de marca o falso positivo. Medido en Edge sin ventana a 1000×760, 1366×768, 1440×900 y 390×844: el titular no se mueve entre vistas, nada se desborda y "Simular" y la tarjeta de la oficina quedan a la vista (L17) |
 | T11 | S2, S7 | inline | hecho | https://github.com/VictorLaraL/qadra (público): `main` en `f448231` y `feat/demo-hackaton` con todo el trabajo. Antes de subir se revisó el historial completo: un solo autor con correo noreply, sin secretos ni documentos de estrategia |
 
 - **T1** Estructura del proyecto (Worker, D1, configuración, scripts) con la misma base que Sin Morralla.
@@ -53,6 +58,10 @@ Rama: `feat/demo-hackaton` · Entrega: `single-pr` (mismo criterio que Sin Morra
 - **T9** README para jueces con diagrama, `docs/entrega.md` y referencia del API.
 - **T10** Publicar en Cloudflare (D1 remota y Worker) en la cuenta personal.
 - **T11** Subir a GitHub (`VictorLaraL/qadra`) solo el código y los documentos del hackatón.
+- **T12** Landing según la auditoría de impeccable: contraste y avisos para lector de pantalla; teléfono de altura fija
+  (el titular no salta y "Simular" queda a la vista); el pago llega del teléfono a la oficina; movimiento reducido con
+  alternativas; "Pagado" no se borra solo; pulso que no repinta ni corre fuera de vista; sin etiquetas sobre títulos;
+  texto sin degradado ni palabras huérfanas; detalles de movimiento y tokens de color.
 
 Rutas: todo inline. Ninguna unidad cumple el disparador de escritor: las piezas comparten el mismo contrato de datos
 (esquema, conciliación y eventos en vivo) y se construyen una sobre otra, así que no hay unidades independientes con
@@ -155,5 +164,16 @@ superficies disjuntas para paralelizar.
 - **L15 (2026-11-25) Publicación final:** Worker versión `114b3409` desplegado desde `36d623b`. En producción: páginas
   y `reglas.js` 200, clave `demo` con rol jurado, cobro → pago simulado → pagado y cuadre "cuadra". Repositorio público
   en GitHub con `main` y `feat/demo-hackaton`; pasar el trabajo a `main` queda a decisión del usuario.
+- **L17 (2026-11-25) Auditoría de impeccable aplicada:** se siguieron sus guías (piso de calidad, layout, distill,
+  typeset, polish y animate). Medido antes y después en Edge sin ventana: el titular pasaba de y=209 a y=286 al
+  cobrar; ahora no se mueve en ningún tamaño. La carga movía la página (0.037) por la marca pintada con JS; ahora
+  ~0.008. Con movimiento reducido se conservan el resaltado de la fila y un fundido de "Pagado". El motor de captura de
+  movimiento de impeccable no pudo medir esta animación (empieza al responder el servidor y el pulso era infinito): los
+  cuadros se tomaron por CDP y los revisó un subagente con el rol de revisor de movimiento. Durante el trabajo el
+  usuario pidió "igual quita estos titulos de cada apartado no me gustan como se ven" (ya estaban quitados en esta
+  tanda) y una licencia: "agregale a la documentacion de github na licencia pues el codigo y la idea es nuestra asi
+  que nadie puede usarlo mas que para el hackathon" (`0cfb11a`: LICENSE de uso restringido, README y package.json).
+  Se dejaron sin cambiar, con motivo: las fuentes y la trama de cuadras (identidad v2), la tarjeta del crédito dentro
+  del teléfono (imita la app real) y la estructura de tarjetas de las secciones (sería rediseño, no corrección).
 - **L16 (2026-11-25):** "Sí, pasar a main". `main` avanza directo (sin commit de fusión) hasta `feat/demo-hackaton`,
   igual que en Sin Morralla: quien abre el repositorio ve la demo completa.

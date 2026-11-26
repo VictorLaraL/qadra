@@ -27,7 +27,13 @@
 
     <div class="portada trama">
       <header class="nav">
-        <a class="marca" href="/" id="marca-nav" aria-label="Qadra, inicio"></a>
+        <!-- La marca va en el HTML (no la pinta el JS) para que aparezca con la página y no empuje nada al cargar. -->
+        <a class="marca" href="/" aria-label="Qadra, inicio"
+          ><svg class="isotipo" width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
+            <defs><linearGradient id="q-nav" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2A64A8" /><stop offset=".55" stop-color="#178373" /><stop offset="1" stop-color="#2BB582" /></linearGradient></defs>
+            <g fill="none" stroke-linecap="round" stroke-linejoin="round" transform="translate(1 2)"><rect x="7" y="6" width="42" height="42" rx="13" stroke="url(#q-nav)" stroke-width="7" /><polyline points="17,27.5 24.5,35 38,20.5" stroke="#19C37D" stroke-width="6.5" /><path d="M37 47C40 55 47 58.5 58 57" stroke="#2BB582" stroke-width="6.5" /></g></svg
+          ><span><b>Qadra</b><small>Cobranza Inteligente</small></span></a
+        >
         <nav aria-label="Secciones">
           <a href="#demo">Demo en vivo</a>
           <a href="#como">Cómo funciona</a>
@@ -38,14 +44,13 @@
 
       <section class="heroe">
         <div class="heroe-texto">
-          <p class="antetitulo">Hackatón México 2026 · CoDi con el API de pey</p>
           <h1>Que todo <em>cuadre</em>.</h1>
           <p class="entrada-texto">
             Qadra es la cobranza con CoDi para financieras. El gestor cobra en campo <b>sin cargar efectivo</b>, el pago se confirma <b>en segundos</b> y se
             concilia <b>solo</b> contra la cuota del crédito.
           </p>
           <div class="heroe-botones">
-            <a class="boton verde" href="#demo" id="cta-demo">Probar con $0.01</a>
+            <a class="boton verde" href="#demo">Probar la demo</a>
             <a class="boton fantasma" href="/gestor/">Abrir la app del gestor</a>
           </div>
           <ul class="sellos">
@@ -53,14 +58,30 @@
             <li><b>Segundos</b> para ver "Pagado"</li>
             <li>El dinero va <b>directo</b> a la financiera</li>
           </ul>
+          <p class="heroe-contexto">Hecho con el API de pey para el Hackatón México 2026.</p>
         </div>
 
-        <!-- Demo en vivo: el QR fijo de un crédito de ejemplo. Cada pago llega por el webhook de pey y se ve aquí al instante. -->
-        <div class="demo" id="demo" aria-live="polite">
+        <!-- Demo en vivo: el QR fijo de un crédito de ejemplo. Cada pago llega por el webhook de pey, se ve "Pagado" en el
+             teléfono y, enseguida, el pago ya aplicado en la tarjeta de la oficina. -->
+        <div class="demo" id="demo">
           <div class="telefono-demo">
-            <div class="td-barra"><span id="td-logo"></span><b>Ruta de hoy</b><span class="td-vivo"><span class="pulso" id="pulso-demo"></span><span id="estado-demo">Conectando…</span></span></div>
+            <div class="td-barra">
+              <svg class="isotipo" width="24" height="24" viewBox="0 0 64 64" aria-hidden="true">
+                <defs><linearGradient id="q-tel" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2A64A8" /><stop offset=".55" stop-color="#178373" /><stop offset="1" stop-color="#2BB582" /></linearGradient></defs>
+                <g fill="none" stroke-linecap="round" stroke-linejoin="round" transform="translate(1 2)"><rect x="7" y="6" width="42" height="42" rx="13" stroke="url(#q-tel)" stroke-width="7" /><polyline points="17,27.5 24.5,35 38,20.5" stroke="#19C37D" stroke-width="6.5" /><path d="M37 47C40 55 47 58.5 58 57" stroke="#2BB582" stroke-width="6.5" /></g>
+              </svg>
+              <b>Ruta de hoy</b><span class="td-vivo"><span class="pulso" id="pulso-demo"></span><span id="estado-demo">Conectando…</span></span>
+            </div>
             <div class="td-cuerpo" id="td-cuerpo"><p class="td-cargando">Cargando la demo…</p></div>
           </div>
+          <!-- Lo que ve la oficina del mismo pago: aparece cuando "Pagado" termina de dibujarse. -->
+          <div class="td-oficina" id="td-oficina">
+            <svg class="td-oficina-icono" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2.5" /><path d="M8 20h8M12 16v4" /></svg>
+            <p><span class="td-oficina-titulo" id="oficina-titulo">Portal de la financiera</span><span id="oficina-texto">Cada pago llega aquí, ya aplicado.</span></p>
+            <a class="td-oficina-ver" href="#conciliacion">Ver</a>
+          </div>
+          <!-- Avisos cortos para lector de pantalla: qué cambió en la demo, sin volver a leer todo el teléfono. -->
+          <p class="solo-lectores" role="status" id="anuncio-demo"></p>
         </div>
       </section>
     </div>
@@ -68,8 +89,7 @@
     <main>
       <section class="oficina" aria-labelledby="t-oficina">
         <div class="oficina-texto">
-          <p class="antetitulo">Mientras tanto, en la oficina</p>
-          <h2 id="t-oficina">El pago ya está en el crédito correcto</h2>
+          <h2 id="t-oficina">En la oficina, el pago ya está en el crédito correcto</h2>
           <p>
             Nadie revisa estados de cuenta ni pide capturas. Cada cobro lleva un folio que viaja a Banxico y regresa en el aviso de pey: con él, Qadra sabe a
             qué crédito y a qué cuota aplicarlo.
@@ -80,7 +100,7 @@
             <div><strong class="cifra">0</strong><span>pesos que pasan por Qadra</span></div>
           </div>
         </div>
-        <div class="tarjeta conciliados">
+        <div class="tarjeta conciliados" id="conciliacion">
           <header><h3>Conciliación en vivo</h3><span class="nota" id="credito-demo"></span></header>
           <ul id="lista-demo" class="lista-demo"><li class="nota">Aún no hay pagos a este QR hoy. Sé la primera persona.</li></ul>
           <a class="enlace" href="/portal/">Ver el portal completo de la financiera</a>
@@ -88,7 +108,6 @@
       </section>
 
       <section class="problema" aria-labelledby="t-problema">
-        <p class="antetitulo">El problema</p>
         <h2 id="t-problema">Cobrar un crédito todavía cuesta dinero, tiempo y riesgo</h2>
         <div class="rejilla cuatro">
           <article class="tarjeta"><strong>2.6 % + $3</strong><h3>por cada pago en tienda</h3><p>La comisión típica de cobrar en efectivo en tiendas de conveniencia, más IVA.<sup>1</sup></p></article>
@@ -99,7 +118,6 @@
       </section>
 
       <section class="como" id="como" aria-labelledby="t-como">
-        <p class="antetitulo">Cómo funciona</p>
         <h2 id="t-como">Tres pasos, sin efectivo y sin capturas de pantalla</h2>
         <ol class="rejilla tres pasos">
           <li class="tarjeta"><span class="paso">1</span><h3>El gestor cobra con CoDi</h3>
@@ -112,7 +130,6 @@
       </section>
 
       <section class="incluye" aria-labelledby="t-incluye">
-        <p class="antetitulo">Lo que hay en la demo</p>
         <h2 id="t-incluye">Un módulo para la financiera, no otra app para el cliente</h2>
         <div class="rejilla tres">
           <article class="tarjeta"><h3>App del gestor</h3><p>Ruta del día, cobro con QR o al celular, "Pagado" en segundos y visitas con promesa de pago. Funciona en el navegador del celular y guarda las visitas si no hay señal.</p><a class="enlace" href="/gestor/">Abrir la app</a></article>
@@ -125,8 +142,7 @@
       </section>
 
       <section class="pey" id="pey" aria-labelledby="t-pey">
-        <p class="antetitulo">CoDi y el API de pey</p>
-        <h2 id="t-pey">Cada pieza del API tiene un trabajo</h2>
+        <h2 id="t-pey">Cada pieza del API de pey tiene un trabajo</h2>
         <div class="tabla-pey" role="table" aria-label="Uso del API de pey">
           <div role="row"><span role="cell" class="mono">POST /codi/qr</span><span role="cell">Crea el QR de cada cobro con vigencia de 10 minutos y el QR fijo de cada crédito. El folio viaja como <span class="mono">numRef</span>.</span></div>
           <div role="row"><span role="cell" class="mono">POST /codi/pn</span><span role="cell">Manda la solicitud de cobro a la app bancaria del acreditado, con el mismo folio.</span></div>
@@ -148,7 +164,12 @@
 
     <footer class="pie-landing">
       <div>
-        <a class="marca" href="/" id="marca-pie"></a>
+        <a class="marca" href="/" aria-label="Qadra, inicio"
+          ><svg class="isotipo" width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
+            <defs><linearGradient id="q-pie" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2A64A8" /><stop offset=".55" stop-color="#178373" /><stop offset="1" stop-color="#2BB582" /></linearGradient></defs>
+            <g fill="none" stroke-linecap="round" stroke-linejoin="round" transform="translate(1 2)"><rect x="7" y="6" width="42" height="42" rx="13" stroke="url(#q-pie)" stroke-width="7" /><polyline points="17,27.5 24.5,35 38,20.5" stroke="#19C37D" stroke-width="6.5" /><path d="M37 47C40 55 47 58.5 58 57" stroke="#2BB582" stroke-width="6.5" /></g></svg
+          ><span><b>Qadra</b><small>Cobranza Inteligente</small></span></a
+        >
         <p>Proyecto para el Hackatón México 2026. Financiera Jacaranda, sus créditos y sus acreditados son ficticios.</p>
       </div>
       <ol class="fuentes">

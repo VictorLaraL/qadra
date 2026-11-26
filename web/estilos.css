@@ -14,6 +14,14 @@
   --fondo: #eff3f6;
   --noche: #080e1e;
   --superficie-oscura: #131b2e;
+  /* Texto y bordes sobre la noche (portada, cierre y pie): grises teñidos del mismo azul, nunca grises neutros */
+  --sobre-noche: #c8d1e2;
+  --sobre-noche-suave: #a9b4c9;
+  --sobre-noche-tenue: #8f9bb3;
+  --sobre-noche-enlace: #b9c6e0;
+  --marco-telefono: #1c2740;
+  --marco-telefono-borde: #2c3a5c;
+  --azul-texto: #173bb0;
   /* Estados */
   --verde-texto: #0e7a4e;
   --verde-suave: #e6f8f0;
@@ -92,6 +100,16 @@ button {
 :focus-visible {
   outline: 3px solid var(--electrico);
   outline-offset: 2px;
+}
+
+/* Superficies del navegador también con la marca */
+::selection {
+  background: rgb(25 195 125 / 30%);
+}
+
+html {
+  caret-color: var(--electrico);
+  accent-color: var(--esmeralda);
 }
 
 .solo-lectores {
@@ -194,7 +212,7 @@ button {
 
 .boton.suave {
   background: var(--azul-suave);
-  color: #173bb0;
+  color: var(--azul-texto);
 }
 
 .boton.suave:hover {
@@ -261,7 +279,7 @@ button {
 
 .etiqueta.hoy {
   background: var(--azul-suave);
-  color: #173bb0;
+  color: var(--azul-texto);
 }
 
 .etiqueta.atraso,
@@ -408,8 +426,7 @@ button {
   font-weight: 600;
   font-size: 0.92rem;
   box-shadow: var(--sombra-alta);
-  animation: sube 0.22s ease both;
-  transition: opacity 0.35s ease;
+  animation: sube 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .aviso.bien {
@@ -420,8 +437,10 @@ button {
   background: var(--coral-texto);
 }
 
+/* La salida es más corta que la entrada: el aviso ya se leyó. */
 .aviso.sale {
   opacity: 0;
+  transition: opacity 0.15s ease-in;
 }
 
 @keyframes sube {
@@ -431,9 +450,12 @@ button {
   }
 }
 
-/* Punto de "en vivo" */
+/* Punto de "en vivo". La onda es un pseudo-elemento que solo cambia transform y opacity: no repinta la página en cada
+   cuadro, como pasaba al animar box-shadow. */
 .pulso {
+  position: relative;
   display: inline-block;
+  flex: none;
   width: 9px;
   height: 9px;
   border-radius: 50%;
@@ -442,17 +464,28 @@ button {
 
 .pulso.vivo {
   background: var(--esmeralda);
-  box-shadow: 0 0 0 0 rgb(25 195 125 / 55%);
-  animation: late 1.8s infinite;
+}
+
+.pulso.vivo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--esmeralda);
+  opacity: 0;
+  animation: late 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
 
 @keyframes late {
-  70% {
-    box-shadow: 0 0 0 9px rgb(25 195 125 / 0%);
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
   }
 
+  70%,
   100% {
-    box-shadow: 0 0 0 0 rgb(25 195 125 / 0%);
+    transform: scale(3);
+    opacity: 0;
   }
 }
 
@@ -505,6 +538,14 @@ button {
     24px 24px;
 }
 
+@keyframes aparece {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Movimiento reducido. La regla general quita todo desplazamiento como red de seguridad; debajo van las alternativas con
+   intención: lo que avisa algo (un pago nuevo, "Pagado", un aviso) se conserva como color u opacidad, sin moverse. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -513,6 +554,17 @@ button {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* El resaltado de un pago recién llegado es solo color: se mantiene completo. */
+  .nuevo {
+    animation-duration: 6s !important;
+  }
+
+  /* "Pagado" y los avisos llegan con un fundido corto, sin crecer ni subir. */
+  .palomita,
+  .aviso {
+    animation: aparece 0.2s ease-out both !important;
   }
 
   .palomita svg {

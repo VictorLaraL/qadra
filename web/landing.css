@@ -4,6 +4,18 @@ body.landing {
   background: var(--blanco);
 }
 
+/* Títulos con líneas parejas y párrafos sin palabras huérfanas (los navegadores que no lo entienden lo ignoran). */
+.landing h1,
+.landing h2,
+.landing h3 {
+  text-wrap: balance;
+}
+
+.landing p,
+.landing li {
+  text-wrap: pretty;
+}
+
 .saltar {
   position: absolute;
   left: 12px;
@@ -19,20 +31,14 @@ body.landing {
   top: 12px;
 }
 
-.antetitulo {
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--verde-texto);
-}
-
 /* ------------------------------------------------------------------ Portada */
 
 .portada {
   background-color: var(--noche);
-  color: #dfe5f0;
+  color: var(--sobre-noche);
   padding-bottom: clamp(40px, 6vw, 80px);
+  /* La sombra del teléfono se queda dentro de la portada en vez de mancharse sobre la sección blanca. */
+  overflow: hidden;
 }
 
 .nav {
@@ -50,7 +56,7 @@ body.landing {
 
 .nav .marca small,
 .pie-landing .marca small {
-  color: #a9b4c9;
+  color: var(--sobre-noche-suave);
 }
 
 .nav nav {
@@ -60,10 +66,11 @@ body.landing {
 }
 
 .nav nav a {
-  color: #c8d1e2;
+  color: var(--sobre-noche);
   font-weight: 600;
   font-size: 0.94rem;
   text-decoration: none;
+  transition: color 0.15s ease;
 }
 
 .nav nav a:hover {
@@ -80,31 +87,25 @@ body.landing {
   gap: clamp(32px, 5vw, 72px);
 }
 
-.portada .antetitulo {
-  color: var(--esmeralda);
-}
-
 .heroe h1 {
-  margin: 14px 0 20px;
+  margin: 0 0 20px;
   font-size: clamp(3rem, 8.2vw, 6rem);
   font-weight: 800;
   line-height: 0.98;
-  letter-spacing: -0.045em;
+  letter-spacing: -0.04em;
   color: #fff;
 }
 
+/* El énfasis va en el color de la marca, sin degradado. */
 .heroe h1 em {
   font-style: normal;
-  background: linear-gradient(120deg, #2bb582 10%, #7fe7bf 90%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--esmeralda);
 }
 
 .entrada-texto {
   max-width: 34rem;
   font-size: clamp(1.05rem, 1.6vw, 1.22rem);
-  color: #c8d1e2;
+  color: var(--sobre-noche);
 }
 
 .entrada-texto b {
@@ -147,18 +148,30 @@ body.landing {
   flex-wrap: wrap;
   gap: 10px 26px;
   font-size: 0.92rem;
-  color: #a9b4c9;
+  color: var(--sobre-noche-suave);
 }
 
 .sellos b {
   color: #fff;
 }
 
+/* Palomita dibujada (SVG), con el mismo trazo redondo que el isotipo. */
 .sellos li::before {
-  content: "✓";
+  content: "";
+  display: inline-block;
+  vertical-align: -2px;
   margin-right: 8px;
-  color: var(--esmeralda);
-  font-weight: 800;
+  width: 14px;
+  height: 14px;
+  background: var(--esmeralda);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.6l3.2 3.1L13 4.8' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+.heroe-contexto {
+  margin-top: 22px;
+  font-size: 0.86rem;
+  color: var(--sobre-noche-tenue);
 }
 
 /* ------------------------------------------------------------------ Teléfono de la demo */
@@ -166,20 +179,24 @@ body.landing {
 .demo {
   display: grid;
   justify-items: center;
+  gap: 12px;
   scroll-margin-top: 24px;
 }
 
+/* La pantalla tiene la MISMA altura en todas las vistas (crédito, QR y "Pagado"): el teléfono no cambia de tamaño y el
+   titular de al lado no salta al cobrar. La altura alcanza para la vista más alta, la del QR. */
 .telefono-demo {
+  --alto-pantalla: 500px;
+  --lado-qr: 224px;
   width: min(100%, 372px);
   border-radius: 38px;
-  border: 10px solid #1c2740;
+  border: 10px solid var(--marco-telefono);
   background: var(--fondo);
   color: var(--nocturno);
   overflow: hidden;
   box-shadow:
-    0 0 0 2px #2c3a5c,
-    0 40px 90px rgb(0 0 0 / 55%),
-    0 0 120px rgb(25 195 125 / 10%);
+    0 0 0 2px var(--marco-telefono-borde),
+    0 40px 90px rgb(0 0 0 / 55%);
 }
 
 .td-barra {
@@ -202,21 +219,47 @@ body.landing {
   gap: 7px;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #c8d1e2;
+  color: var(--sobre-noche);
+}
+
+/* "En vivo": punto fijo; late tres veces al conectarse y cada vez que llega un pago (landing.js), no sin parar. */
+#pulso-demo.vivo::after {
+  animation: none;
+}
+
+#pulso-demo.vivo.latido::after {
+  animation: late 1.6s cubic-bezier(0, 0, 0.2, 1) 3;
+}
+
+/* Fuera de la vista no se anima nada que se repita (landing.js marca el cuerpo cuando la demo sale de pantalla). */
+.demo-fuera .pulso.vivo::after {
+  animation-play-state: paused;
 }
 
 .td-cuerpo {
-  min-height: 470px;
+  height: var(--alto-pantalla);
   padding: 16px;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
-  align-content: start;
+}
+
+/* Al cambiar de vista, la pantalla nueva entra con un fundido corto; si solo se actualizan datos, no se anima. */
+.td-cuerpo.entra > * {
+  animation: aparece 0.2s ease-out both;
+}
+
+/* La acción principal va abajo, como en la app del gestor. */
+.td-accion {
+  margin-top: auto;
+  display: grid;
+  gap: 10px;
 }
 
 .td-cargando {
-  padding: 60px 0;
+  margin: auto 0;
   text-align: center;
-  color: var(--acero);
+  color: var(--grafito);
 }
 
 .td-credito {
@@ -256,7 +299,58 @@ body.landing {
   height: 100%;
   border-radius: inherit;
   background: var(--esmeralda);
-  transition: width 0.6s ease;
+}
+
+/* En la vista del QR el crédito se resume en un renglón para dejarle espacio al código. */
+.td-credito.compacto {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+.td-credito.compacto div {
+  display: grid;
+}
+
+.td-credito.compacto b {
+  font-size: 1.05rem;
+}
+
+/* Lo que hay que hacer en la demo, en tres pasos. */
+.td-pasos {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0 2px;
+  display: grid;
+  gap: 12px;
+  counter-reset: paso;
+}
+
+.td-pasos li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  font-size: 0.88rem;
+  color: var(--grafito);
+}
+
+.td-pasos li::before {
+  counter-increment: paso;
+  content: counter(paso);
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: var(--nocturno);
+  color: var(--esmeralda);
+  font: 800 0.78rem/1 var(--titulos);
+}
+
+.td-pasos b {
+  color: var(--nocturno);
 }
 
 .td-cobrar {
@@ -272,8 +366,9 @@ body.landing {
 }
 
 .td-cuerpo .qr {
-  width: min(100%, 260px);
-  justify-self: center;
+  flex: none;
+  width: min(100%, var(--lado-qr));
+  align-self: center;
   border: 1px solid var(--niebla);
 }
 
@@ -285,13 +380,13 @@ body.landing {
   padding: 10px;
   border-radius: var(--radio-chico);
   background: var(--azul-suave);
-  color: #173bb0;
+  color: var(--azul-texto);
   font-weight: 600;
   font-size: 0.92rem;
 }
 
 .td-pagado {
-  padding: 22px 4px 6px;
+  margin-block: auto;
   display: grid;
   gap: 8px;
   justify-items: center;
@@ -307,7 +402,7 @@ body.landing {
 
 .td-pagado dl {
   width: 100%;
-  margin: 10px 0;
+  margin: 10px 0 0;
   padding: 2px 14px;
   border-radius: var(--radio);
   background: var(--blanco);
@@ -338,12 +433,90 @@ body.landing {
   text-align: right;
 }
 
+.td-pagado + .td-accion {
+  margin-top: 0;
+}
+
 .td-aviso {
-  padding: 40px 12px;
+  margin: auto 0;
+  padding: 0 12px;
   display: grid;
   gap: 12px;
   justify-items: center;
   text-align: center;
+}
+
+/* Lo que ve la oficina del mismo pago, debajo del teléfono. Antes de pagar explica qué va a pasar; al llegar un pago
+   lo muestra ya aplicado, con un tinte verde y el texto nuevo bajando desde el teléfono. */
+.td-oficina {
+  width: min(100%, 372px);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radio);
+  border: 1px solid rgb(255 255 255 / 12%);
+  background: rgb(255 255 255 / 5%);
+  color: var(--sobre-noche);
+  font-size: 0.88rem;
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease;
+}
+
+.td-oficina p {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* Un renglón siempre: si el texto cambiara de alto, la tarjeta movería al titular de al lado. */
+.td-oficina p > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.td-oficina-titulo {
+  font-size: 0.78rem;
+  color: var(--sobre-noche-tenue);
+}
+
+.td-oficina-icono {
+  color: var(--sobre-noche-suave);
+  transition: color 0.3s ease;
+}
+
+.td-oficina-ver {
+  color: var(--sobre-noche-enlace);
+  font-weight: 600;
+  text-underline-offset: 3px;
+}
+
+.td-oficina.recibido {
+  border-color: rgb(25 195 125 / 45%);
+  background: rgb(25 195 125 / 10%);
+}
+
+.td-oficina.recibido .td-oficina-icono {
+  color: var(--esmeralda);
+}
+
+.td-oficina.recibido #oficina-texto {
+  color: #fff;
+  font-weight: 600;
+}
+
+.td-oficina.llega #oficina-texto {
+  animation: llega 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes llega {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
 }
 
 /* ------------------------------------------------------------------ Secciones */
@@ -356,7 +529,7 @@ main > section {
 
 main h2 {
   max-width: 44rem;
-  margin: 10px 0 28px;
+  margin: 0 0 28px;
   font-size: clamp(1.7rem, 3.6vw, 2.6rem);
   font-weight: 800;
   letter-spacing: -0.03em;
@@ -413,9 +586,10 @@ main h2 {
   margin-top: -4px;
 }
 
+/* Las notas al pie van en grafito: sobre el gris de las tarjetas, el acero no llegaba a 4.5:1. */
 .problema sup {
   font-size: 0.7em;
-  color: var(--acero);
+  color: var(--grafito);
 }
 
 .pasos .paso {
@@ -479,13 +653,15 @@ main h2 {
 .conciliados {
   padding: 22px;
   box-shadow: var(--sombra);
+  scroll-margin-top: 24px;
 }
 
 .conciliados header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: baseline;
-  gap: 12px;
+  gap: 4px 12px;
   margin-bottom: 8px;
 }
 
@@ -530,6 +706,7 @@ main h2 {
   color: var(--acero);
 }
 
+/* El pago nuevo se resalta cuando la tarjeta está a la vista (landing.js), no mientras nadie la mira. */
 .lista-demo .nuevo {
   animation: destello 6s ease-out both;
 }
@@ -583,7 +760,7 @@ main > section.cierre {
   margin-top: clamp(48px, 7vw, 96px);
   padding: clamp(48px, 7vw, 88px) 20px;
   background-color: var(--noche);
-  color: #c8d1e2;
+  color: var(--sobre-noche);
   text-align: center;
 }
 
@@ -594,7 +771,7 @@ main > section.cierre {
 
 .pie-landing {
   background: var(--noche);
-  color: #8f9bb3;
+  color: var(--sobre-noche-tenue);
   border-top: 1px solid rgb(255 255 255 / 8%);
   padding: 28px clamp(16px, 4vw, 32px) 36px;
   display: grid;
@@ -609,7 +786,8 @@ main > section.cierre {
 }
 
 .pie-landing a {
-  color: #b9c6e0;
+  color: var(--sobre-noche-enlace);
+  text-underline-offset: 3px;
 }
 
 .fuentes {
@@ -620,7 +798,36 @@ main > section.cierre {
   align-content: start;
 }
 
-/* ------------------------------------------------------------------ Pantallas chicas */
+/* ------------------------------------------------------------------ Movimiento reducido */
+
+@media (prefers-reduced-motion: reduce) {
+  /* El texto de la oficina cambia con un fundido, sin bajar. */
+  .td-oficina.llega #oficina-texto {
+    animation: aparece 0.2s ease-out both !important;
+  }
+}
+
+/* ------------------------------------------------------------------ Tamaños de pantalla */
+
+/* Pantallas altas de escritorio: pantalla del teléfono y QR más grandes. */
+@media (min-width: 961px) and (min-height: 880px) {
+  .telefono-demo {
+    --alto-pantalla: 540px;
+    --lado-qr: 260px;
+  }
+}
+
+/* Laptops de poca altura (768 px): el teléfono y la tarjeta de la oficina caben sin desplazarse. */
+@media (min-width: 961px) and (max-height: 820px) {
+  .heroe {
+    padding-top: 12px;
+  }
+
+  .telefono-demo {
+    --alto-pantalla: 486px;
+    --lado-qr: 210px;
+  }
+}
 
 @media (max-width: 960px) {
   .heroe,
@@ -642,6 +849,10 @@ main > section.cierre {
 
   .nav .boton {
     margin-left: auto;
+  }
+
+  .telefono-demo {
+    --alto-pantalla: 520px;
   }
 }
 

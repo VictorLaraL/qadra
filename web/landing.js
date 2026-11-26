@@ -1,22 +1,24 @@
 // Landing: la demo en vivo. Un "teléfono" muestra el crédito de ejemplo con su QR CoDi fijo de un centavo;
-// cuando alguien lo paga, pey avisa al Worker, el pago se concilia y aquí se ve "Pagado" al instante.
+// cuando alguien lo paga, pey avisa al Worker, el pago se concilia y aquí se ve "Pagado" al instante y, enseguida, el
+// mismo pago ya aplicado en la tarjeta de la oficina y en "Conciliación en vivo".
 
-import { $, aviso, crearApi, direccionWs, enVivo, esc, hora, isotipo, NOMBRE_DE_MEDIO, PALOMITA, pesos, sonarPagado } from "/comun.js";
+import { $, aviso, crearApi, direccionWs, enVivo, esc, hora, NOMBRE_DE_MEDIO, PALOMITA, pesos, sonarPagado } from "/comun.js";
 import { descargarPng, svgQr } from "/qr.js";
-import { huellaDePago } from "/reglas.js";
+import { huellaDePago, resumenDelPago } from "/reglas.js";
 
 const api = crearApi();
 const cuerpo = $("#td-cuerpo");
+const oficina = $("#td-oficina");
+const movimientoReducido = matchMedia("(prefers-reduced-motion: reduce)");
 let demo = null;
 let vista = "credito"; // credito | qr | pagado
 let ultimoPago = null;
-let regreso = 0;
 let conectado = false; // si el canal en vivo está abierto; se declara aquí porque los botones lo consultan
 
-const marca =() => `${isotipo(30, { claro: true })}<span><b>Qadra</b><small>Cobranza Inteligente</small></span>`;
-$("#marca-nav").innerHTML = marca();
-$("#marca-pie").innerHTML = marca();
-$("#td-logo").innerHTML = isotipo(24, { claro: true });
+// "Pagado" se dibuja en ~650 ms (estilos.css: brota y traza); la oficina recibe el pago justo al terminar.
+const OFICINA_TRAS_PAGADO_MS = 600;
+
+// ------------------------------------------------------------------ Teléfono
 
 function tarjetaDelCredito() {
   const c = demo.credito;
@@ -30,46 +32,131 @@ function tarjetaDelCredito() {
   </div>`;
 }
 
-function pintarTelefono() {
-  if (!demo) return;
+function creditoCompacto() {
+  const c = demo.credito;
+  const q = c.cuota;
+  return `<div class="td-credito compacto">
+    <div><b>${esc(c.acreditado)}</b><small>Crédito ${esc(c.id)}${q ? ` · cuota ${q.numero} de ${c.cuotasTotales}` : ""}</small></div>
+    <b class="monto">${pesos(demo.qr.montoCentavos)}</b>
+  </div>`;
+}
+
+function htmlDelTelefono() {
   if (!demo.credito || !demo.qr) {
-    cuerpo.innerHTML = `<div class="td-aviso"><b>La demo en vivo no está disponible en este momento</b><p>${esc(demo.aviso ?? "")}</p>
+    return `<div class="td-aviso"><b>La demo en vivo no está disponible en este momento</b><p>${esc(demo.aviso ?? "")}</p>
       <a class="boton chico" href="/gestor/">Abrir la app del gestor</a></div>`;
-    return;
   }
   const monto = pesos(demo.qr.montoCentavos);
   if (vista === "pagado" && ultimoPago) {
-    // El número de cuota llega por el canal en vivo: solo se escribe en la página si de verdad es un número.
-    const cuota = Number.isInteger(ultimoPago.cuota) && ultimoPago.cuota > 0 ? ultimoPago.cuota : null;
-    cuerpo.innerHTML = `<div class="td-pagado">
-      <div class="palomita">${PALOMITA}</div>
-      <b class="td-titulo">Pagado</b>
-      <p class="monto">${pesos(ultimoPago.montoCentavos)} con CoDi · ${esc(hora(ultimoPago.fecha))}</p>
-      <dl>
-        <div><dt>Aplicado</dt><dd>${cuota ? `Abono a la cuota ${cuota}` : "Por revisar"}</dd></div>
-        <div><dt>Clave de rastreo</dt><dd class="mono">${esc(ultimoPago.claveRastreo ?? "—")}</dd></div>
-        ${ultimoPago.banco ? `<div><dt>Banco</dt><dd>${esc(ultimoPago.banco)}</dd></div>` : ""}
-      </dl>
-      <button class="boton chico secundario" data-accion="otro">Cobrar otra vez</button>
-    </div>`;
-    return;
+    const r = resumenDelPago(ultimoPago);
+    return `<div class="td-pagado">
+        <div class="palomita">${PALOMITA}</div>
+        <b class="td-titulo">Pagado</b>
+        <p class="monto">${pesos(ultimoPago.montoCentavos)} con CoDi · ${esc(hora(ultimoPago.fecha))}</p>
+        <dl>
+          <div><dt>Aplicado</dt><dd>${esc(r.aplicado)}</dd></div>
+          <div><dt>Clave de rastreo</dt><dd class="mono">${esc(ultimoPago.claveRastreo ?? "—")}</dd></div>
+          ${ultimoPago.banco ? `<div><dt>Banco</dt><dd>${esc(ultimoPago.banco)}</dd></div>` : ""}
+        </dl>
+      </div>
+      <div class="td-accion"><button class="boton chico secundario ancho" data-accion="otro">Cobrar otra vez</button></div>`;
   }
   if (vista === "qr") {
-    cuerpo.innerHTML = `${tarjetaDelCredito()}
+    return `${creditoCompacto()}
       <div class="qr ${demo.qr.simulado ? "simulado" : ""}" id="qr-demo"></div>
       <p class="td-instruccion">${demo.simulacion ? "En simulación no hay nada que pagar: usa el botón." : `Abre la app de tu banco, entra a <b>CoDi</b> y escanea. Son <b>${monto}</b> reales.`}</p>
-      <div class="td-esperando"><span class="pulso vivo"></span>Esperando el pago…</div>
-      ${demo.simulacion ? '<button class="boton verde ancho" data-accion="simular">Simular el pago</button>' : '<button class="boton suave ancho" data-accion="guardar">Guardar QR (si estás en el celular)</button>'}`;
-    $("#qr-demo").innerHTML = svgQr(demo.qr.qrString);
-    return;
+      <div class="td-accion">
+        <div class="td-esperando"><span class="pulso vivo"></span>Esperando el pago…</div>
+        ${demo.simulacion ? '<button class="boton verde ancho" data-accion="simular">Simular el pago</button>' : '<button class="boton suave ancho" data-accion="guardar">Guardar QR (si estás en el celular)</button>'}
+      </div>`;
   }
-  cuerpo.innerHTML = `${tarjetaDelCredito()}
-    <button class="boton ancho td-cobrar" data-accion="cobrar">Cobrar ${monto} con CoDi</button>
-    <p class="td-nota">${demo.simulacion ? "Demo en modo simulación: el pago es de mentira." : `Cobro real de ${monto}: paga con la app de tu banco y míralo conciliarse.`}</p>`;
+  const segundoPaso = demo.simulacion ? "<b>Simula el pago</b>: llega un aviso firmado, igual que uno de pey." : "<b>Págalo</b> desde la app de tu banco, con CoDi.";
+  return `${tarjetaDelCredito()}
+    <ol class="td-pasos">
+      <li><span>Toca <b>Cobrar</b>: Qadra crea el cobro en pey con un folio.</span></li>
+      <li><span>${segundoPaso}</span></li>
+      <li><span>Mira <b>Pagado</b> aquí y el pago ya aplicado en la oficina.</span></li>
+    </ol>
+    <div class="td-accion">
+      <button class="boton ancho td-cobrar" data-accion="cobrar">Cobrar ${monto} con CoDi</button>
+      <p class="td-nota">${demo.simulacion ? "Demo en modo simulación: el pago es de mentira." : `Cobro real de ${monto}: paga con la app de tu banco y míralo conciliarse.`}</p>
+    </div>`;
 }
 
-function filaDePago(p, nuevo = false) {
-  return `<li class="${nuevo ? "nuevo" : ""}"><time>${esc(hora(p.fecha))}</time>
+let pintado = ""; // lo que ya está en el teléfono: no se vuelve a dibujar (ni a animar) lo mismo
+function pintarTelefono() {
+  if (!demo) return;
+  const html = htmlDelTelefono();
+  if (html === pintado) return; // una consulta que no trae nada nuevo no reinicia "Pagado" ni el botón ocupado
+  const cambioDeVista = cuerpo.dataset.vista !== vista;
+  pintado = html;
+  cuerpo.innerHTML = html;
+  cuerpo.dataset.vista = vista;
+  // Solo un cambio de pantalla entra con fundido; si cambian datos en la misma pantalla, no hay animación.
+  cuerpo.classList.toggle("entra", cambioDeVista);
+  const qr = $("#qr-demo");
+  if (qr) qr.innerHTML = svgQr(demo.qr.qrString);
+}
+
+let turnoDeAnuncio = 0;
+/** Aviso corto para lector de pantalla. Se vacía antes para que el mismo texto se vuelva a leer. */
+function anunciar(texto) {
+  const region = $("#anuncio-demo");
+  const turno = ++turnoDeAnuncio;
+  region.textContent = "";
+  setTimeout(() => turno === turnoDeAnuncio && (region.textContent = texto), 60);
+}
+
+/** El punto "En vivo" late tres veces: al conectarse y cada vez que llega un pago. El resto del tiempo está quieto. */
+function latir() {
+  const punto = $("#pulso-demo");
+  punto.classList.remove("latido");
+  void punto.offsetWidth; // reinicia la animación aunque ya estuviera latiendo
+  punto.classList.add("latido");
+}
+$("#pulso-demo").addEventListener("animationend", (evento) => evento.currentTarget.classList.remove("latido"));
+
+// ------------------------------------------------------------------ La oficina
+
+let oficinaEspera = 0;
+/** La tarjeta de la oficina recibe el pago cuando "Pagado" termina de dibujarse. */
+function oficinaRecibe(pago) {
+  clearTimeout(oficinaEspera);
+  const r = resumenDelPago(pago);
+  oficinaEspera = setTimeout(
+    () => {
+      $("#oficina-titulo").textContent = `Portal de la financiera · ${hora(pago.fecha)}`;
+      $("#oficina-texto").textContent = `Conciliado: ${r.oficina}`;
+      oficina.classList.add("recibido");
+      oficina.classList.remove("llega");
+      void oficina.offsetWidth;
+      oficina.classList.add("llega");
+    },
+    movimientoReducido.matches ? 0 : OFICINA_TRAS_PAGADO_MS,
+  );
+}
+
+// El resaltado de la fila nueva dura 6 s: se guarda hasta que "Conciliación en vivo" esté a la vista, para que no pase
+// mientras nadie la mira (en escritorio la tarjeta queda abajo del teléfono).
+let conciliacionVisible = false;
+let resaltePendiente = false;
+function resaltarFilaNueva() {
+  $("#lista-demo li:not(.nota)")?.classList.add("nuevo");
+  resaltePendiente = false;
+}
+new IntersectionObserver(
+  ([entrada]) => {
+    conciliacionVisible = entrada.isIntersecting;
+    if (conciliacionVisible && resaltePendiente) resaltarFilaNueva();
+  },
+  { threshold: 0.5 },
+).observe($("#conciliacion"));
+
+// Lo que se repite (el punto de "Esperando el pago…") se detiene mientras la demo está fuera de la pantalla.
+new IntersectionObserver(([entrada]) => document.body.classList.toggle("demo-fuera", !entrada.isIntersecting)).observe($("#demo"));
+
+function filaDePago(p) {
+  return `<li><time>${esc(hora(p.fecha))}</time>
     <span><b class="monto">${pesos(p.montoCentavos)}</b> ${esc(NOMBRE_DE_MEDIO[p.medio] ?? "CoDi")}${p.banco ? ` · ${esc(p.banco)}` : ""}<small class="mono">${esc(p.claveRastreo ?? "")}</small></span>
     <span class="etiqueta ${p.origen === "codi" ? "bien" : "espera"}">${p.origen === "codi" ? "Conciliado" : "Simulado"}</span></li>`;
 }
@@ -80,15 +167,23 @@ function pintarOficina(nuevo = false) {
   $("#caja-reales").hidden = demo.simulacion && !demo.pagosReales;
   $("#c-reales").textContent = demo.pagosReales;
   $("#credito-demo").textContent = demo.credito ? `Crédito ${demo.credito.id} · ${demo.credito.acreditado}` : "";
-  if (demo.ultimos.length) $("#lista-demo").innerHTML = demo.ultimos.map((p, i) => filaDePago(p, nuevo && i === 0)).join("");
-  $("#cta-demo").textContent = demo.simulacion ? "Probar la demo" : `Probar con ${pesos(demo.qr?.montoCentavos ?? 1)}`;
+  if (!demo.ultimos.length) return;
+  $("#lista-demo").innerHTML = demo.ultimos.map(filaDePago).join("");
+  if (!nuevo) return;
+  if (conciliacionVisible) resaltarFilaNueva();
+  else resaltePendiente = true;
 }
+
+// ------------------------------------------------------------------ Datos y pagos
 
 async function cargar({ nuevo = false } = {}) {
   try {
     demo = await api("/api/demo");
   } catch (error) {
-    if (!demo) cuerpo.innerHTML = `<div class="td-aviso"><b>No se pudo cargar la demo</b><p>${esc(error.message)}</p></div>`;
+    if (!demo) {
+      pintado = "";
+      cuerpo.innerHTML = `<div class="td-aviso"><b>No se pudo cargar la demo</b><p>${esc(error.message)}</p></div>`;
+    }
     return;
   }
   pintarTelefono();
@@ -97,17 +192,17 @@ async function cargar({ nuevo = false } = {}) {
 
 let anunciado = ""; // huella del último pago que ya se mostró como "Pagado": el mismo pago no se anuncia dos veces
 
+/** Llegó un pago: "Pagado" en el teléfono, el pago en la oficina y el aviso para lector de pantalla. Se queda en
+ * pantalla hasta que la persona cobre otra vez: el recibo no se borra solo mientras alguien lo lee. */
 function alPagar(pago) {
   ultimoPago = pago;
   anunciado = huellaDePago(pago);
   vista = "pagado";
   sonarPagado();
+  latir();
+  anunciar(resumenDelPago(pago).anuncio);
+  oficinaRecibe(pago);
   cargar({ nuevo: true });
-  clearTimeout(regreso);
-  regreso = setTimeout(() => {
-    vista = "credito";
-    pintarTelefono();
-  }, 12_000);
 }
 
 const ESPERA_CON_CANAL_MS = 2500; // margen para que "Pagado" llegue solo por el canal en vivo
@@ -131,19 +226,17 @@ async function buscarPagoNuevo(antes = fotoDeLaDemo()) {
   alPagar({ ...ultimo, cuota: antes.cuota });
 }
 
+function mostrarQr() {
+  vista = "qr";
+  pintarTelefono();
+  if (demo?.qr) anunciar(`Se muestra el QR de cobro de ${pesos(demo.qr.montoCentavos)}.`);
+}
+
 cuerpo.addEventListener("click", async (evento) => {
   const boton = evento.target.closest("[data-accion]");
   if (!boton) return;
   const accion = boton.dataset.accion;
-  if (accion === "cobrar") {
-    vista = "qr";
-    pintarTelefono();
-  }
-  if (accion === "otro") {
-    clearTimeout(regreso);
-    vista = "qr";
-    pintarTelefono();
-  }
+  if (accion === "cobrar" || accion === "otro") mostrarQr();
   if (accion === "guardar") descargarPng(demo.qr.qrString, "qadra-demo-codi.png");
   if (accion === "simular") {
     boton.disabled = true;
@@ -170,9 +263,11 @@ enVivo(
   () => direccionWs("/api/demo/en-vivo"),
   (m) => m.tipo === "pago" && alPagar(m),
   (estado) => {
+    const antes = conectado;
     conectado = estado;
     $("#pulso-demo").classList.toggle("vivo", estado);
     $("#estado-demo").textContent = estado ? "En vivo" : "Reconectando…";
+    if (estado && !antes) latir();
   },
 );
 // Respaldo: mientras el canal en vivo esté caído, la página se pone al día sola y muestra "Pagado" si llegó un pago.
