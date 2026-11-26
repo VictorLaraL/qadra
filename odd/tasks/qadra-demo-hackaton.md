@@ -155,3 +155,5 @@ superficies disjuntas para paralelizar.
 - **L15 (2026-11-25) Publicación final:** Worker versión `114b3409` desplegado desde `36d623b`. En producción: páginas
   y `reglas.js` 200, clave `demo` con rol jurado, cobro → pago simulado → pagado y cuadre "cuadra". Repositorio público
   en GitHub con `main` y `feat/demo-hackaton`; pasar el trabajo a `main` queda a decisión del usuario.
+- **L16 (2026-11-25):** "Sí, pasar a main". `main` avanza directo (sin commit de fusión) hasta `feat/demo-hackaton`,
+  igual que en Sin Morralla: quien abre el repositorio ve la demo completa.
