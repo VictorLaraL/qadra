@@ -32,10 +32,10 @@ Rama: `feat/demo-hackaton` · Entrega: `single-pr` (mismo criterio que Sin Morra
 | T5 | S1, S5 | inline | hecho | `99054bc`. Navegador integrado: ruta real del servidor, ficha, hoja de cobro, QR rotulado SIMULADO, pago simulado y "Pagado" con la cuota conciliada; progreso de la ruta 2 → 3 de 8; 375 px sin desplazamiento horizontal |
 | T6 | S1, S5 | inline | hecho | `a31bb9b`. Navegador integrado: resumen, aviso perdido → "No cuadra" → Recuperar → "Todo cuadra", transferencia sin referencia asignada a un crédito, ficha del crédito, integración; 375 px sin desbordes en las cuatro vistas (corregido en `01201b5`) |
 | T7 | S1, S5 | inline | hecho | `01201b5`. Navegador integrado: landing con la demo en vivo ("Pagado" por WebSocket y fila nueva en la conciliación), página de pago de un cobro real del servidor local y su recibo; 375 px sin desbordes |
-| T8 | S5, S6 | inline | hecho | Unitarias 94/94, e2e 31/31, `tsc` limpio; servidor local en el puerto 8790 |
+| T8 | S5, S6 | inline | hecho | Unitarias 103/103, e2e 31/31, `tsc` limpio; servidor local en el puerto 8790. Advertencias de RDD de la interfaz en `4a7c6fe`, `a625d04` y `36d623b` (L12 a L14) |
 | T9 | S2, S3 | inline | hecho | `README.md` con un diagrama Mermaid, `docs/entrega.md` (descripción 483 palabras, instrucciones 606) |
 | T10 | S4, S7 | inline | hecho | D1 `qadra` (WNAM) con migraciones 0001 y 0002; Worker en https://qadra.victormlaralopez.workers.dev. En producción: landing, app, portal y página de pago 200; clave `demo` da rol jurado; cobro → pago simulado → pagado; cuadre con el libro simulado "cuadra" |
-| T11 | S2, S7 | inline | pendiente | |
+| T11 | S2, S7 | inline | hecho | https://github.com/VictorLaraL/qadra (público): `main` en `f448231` y `feat/demo-hackaton` con todo el trabajo. Antes de subir se revisó el historial completo: un solo autor con correo noreply, sin secretos ni documentos de estrategia |
 
 - **T1** Estructura del proyecto (Worker, D1, configuración, scripts) con la misma base que Sin Morralla.
 - **T2** Núcleo sin dependencias de Cloudflare, con pruebas: firma de avisos (Standard Webhooks), normalización del
@@ -120,3 +120,38 @@ superficies disjuntas para paralelizar.
   `PEY_WEBHOOK_SECRET`, `PORTAL_TOKEN` y `JURADO_TOKEN`. **Pendiente del usuario antes de entregar:** llave de pey
   propia, webhook, prueba con un pago real y consulta a `legal@pey.mx` (ver `docs/entrega.md`). El camino de cobro real
   no se ha probado con dinero real.
+- **L12 RDD de la interfaz (riesgo alto, tres tramos):** `review-fa7f3adf6d657fa5` (identidad y app del gestor),
+  `review-2f172c0c69cc3189` (portal) y `review-9f75a8eee6829470` (landing y página de pago), con lentes riesgo,
+  legibilidad y confiabilidad: **aprobadas y confirmadas**. Advertencias atendidas en `4a7c6fe` y `a625d04`. Las reglas
+  del navegador que se podían probar sin página se movieron a `web/reglas.js` (RED: módulo inexistente; GREEN 7 pruebas).
+  - App del gestor: una visita en cola solo se descarta con un rechazo definitivo (400 o 404); arranque sin señal con
+    la sesión y la ruta guardadas; respuestas tardías que ya no pisan a las nuevas (ruta, ficha, cobro); fin de la
+    recursión ante un gestor inexistente; "Siguiente visita" espera la ruta actualizada; perder la señal con una hoja
+    abierta ya no borra lo escrito; el horario sale de la sesión del servidor.
+  - Portal: botones que se reactivan si la acción falla; la cuenta de excepciones se actualiza desde cualquier vista;
+    al salir, importar o reiniciar no queda nada de la cartera anterior; cargas con turno para descartar respuestas
+    viejas; una clave guardada que ya no sirve se borra.
+  - Página de pago: un cobro pagado sin recibo ya no se muestra como pendiente; reintento automático si la primera
+    carga falla; una sola consulta al llegar la cuenta a cero.
+  - Landing: con el canal en vivo caído se busca el pago nuevo y se muestra "Pagado".
+  - No se hizo, con motivo: renombrar el objeto de estado `e` del portal (cambio de nombre en unos cien usos, sin
+    efecto en el comportamiento) y pruebas con DOM simulado (se probó la lógica extraída a `web/reglas.js`).
+- **L13 RDD de las correcciones (`0b94bd9..a625d04`, escalado a alto por concurrencia y datos guardados en el
+  teléfono):** `review-f0544650312b05b4`: **aprobada y confirmada**. Advertencias atendidas en `36d623b` (RED: 3
+  pruebas nuevas; GREEN 103/103): las visitas de la cola llevan la huella de la clave que las guardó y las de otra
+  clave no se envían solas (se le preguntan a quien entra); la política de la cola quedó en una sola regla; el aviso
+  de "ruta guardada" ya no contradice a la pantalla; el service worker se instala todo o nada; la landing no anuncia
+  dos veces el mismo pago; la etiqueta de la gráfica recorta debajo de mil pesos. `36d623b` se evaluó en un árbol
+  limpio como riesgo medio y bajo presupuesto: sin revisión debida.
+- **L14 Verificación de la interfaz corregida:** en el navegador integrado contra el servidor local: cobro → "Pagado"
+  → siguiente visita; dos visitas guardadas sin red que sobreviven a una falla 500 y se envían al reconectar; salida
+  con visitas pendientes (quedarse o borrarlas); visita guardada con otra clave (no sale sola; "son mías" la envía);
+  portal (cuenta de excepciones desde Cartera, asignar una excepción, "Todo cuadra", salida sin rastro); página de
+  pago (reintento automático y recibo) y landing sin canal en vivo ("Pagado" por el respaldo). El navegador integrado
+  no guarda la copia de la app, así que el arranque sin red se comprobó en Edge sin ventana contra producción: service
+  worker activo, los 9 archivos guardados y, sin red, la app abrió con la ruta guardada y el aviso "Sin conexión".
+  Una corrida de e2e falló por un cobro pendiente que dejó la verificación a mano (los cobros pendientes sobreviven
+  al reinicio a propósito); la suite ahora los vence al empezar.
+- **L15 (2026-11-25) Publicación final:** Worker versión `114b3409` desplegado desde `36d623b`. En producción: páginas
+  y `reglas.js` 200, clave `demo` con rol jurado, cobro → pago simulado → pagado y cuadre "cuadra". Repositorio público
+  en GitHub con `main` y `feat/demo-hackaton`; pasar el trabajo a `main` queda a decisión del usuario.
