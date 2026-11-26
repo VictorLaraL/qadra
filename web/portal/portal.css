@@ -497,6 +497,7 @@ main#vista {
   gap: 3px;
 }
 
+/* Dura lo mismo que RESALTADO_MS en portal.js: al terminar, la fila deja de marcarse como nueva. */
 .nuevo {
   animation: destello 6s ease-out both;
 }

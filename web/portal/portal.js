@@ -3,12 +3,15 @@
 
 import { $, $$, aviso, copiar, crearApi, diaCorto, diaLargo, direccionWs, enVivo, esc, hora, isotipo, NOMBRE_DE_MEDIO, NOMBRE_DE_VISITA, pesos, plural, situacion } from "/comun.js";
 import { svgQr } from "/qr.js";
+import { etiquetaDeBarra } from "/reglas.js";
 
 const LLAVE = "qadra.clave";
-const e = {
-  clave: "",
-  sesion: null,
-  vista: "resumen",
+const RESALTADO_MS = 6000; // cuánto se resalta un pago recién llegado; igual que la animación .nuevo de portal.css
+const MONTO_SIN_REFERENCIA = 38_000; // centavos de la transferencia sin referencia que se simula
+const CLAVE_VENCIDA = "Tu clave ya no es válida. Entra de nuevo.";
+
+/** Lo que el portal sabe de la cartera. Se arma de nuevo al salir, al importar y al reiniciar: no queda nada de antes. */
+const datosEnBlanco = () => ({
   resumen: null,
   corte: null, // corte del día; con .pey cuando ya se comparó
   comparando: false,
@@ -22,7 +25,9 @@ const e = {
   ficha: null,
   archivo: null, // { nombre, texto, resultado }
   nuevos: new Set(), // pagos que acaban de llegar en vivo: se resaltan un momento
-};
+});
+
+const e = { clave: "", sesion: null, vista: "resumen", ...datosEnBlanco() };
 try {
   e.clave = JSON.parse(localStorage.getItem(LLAVE) ?? '""');
 } catch {
@@ -116,7 +121,7 @@ function barras(semana) {
       const alto = Math.max(4, Math.round((d.cobradoCentavos / maximo) * 100));
       const hoy = i === semana.length - 1;
       return `<div class="barra-dia ${hoy ? "hoy" : ""}" title="${esc(diaCorto(d.dia))}: ${pesos(d.cobradoCentavos)} en ${plural(d.pagos, "pago", "pagos")}">
-        <span class="monto">${Math.round(d.cobradoCentavos / 100000) >= 1 ? `$${(d.cobradoCentavos / 100000).toFixed(1)}k` : pesos(d.cobradoCentavos)}</span>
+        <span class="monto">${etiquetaDeBarra(d.cobradoCentavos)}</span>
         <i style="height:${alto}%"></i><small>${hoy ? "Hoy" : esc(diaCorto(d.dia).split(" ")[0])}</small></div>`;
     })
     .join("")}</div>`;
@@ -386,19 +391,27 @@ function vistaIntegracion() {
 
 const VISTAS = { resumen: vistaResumen, conciliacion: vistaConciliacion, cartera: vistaCartera, integracion: vistaIntegracion };
 
-function pintar() {
-  const foco = document.activeElement?.id;
-  const cursor = foco === "buscar" ? document.activeElement.selectionStart : null;
-  vista.innerHTML = VISTAS[e.vista]();
-  for (const b of $$(".pestanas button")) b.toggleAttribute("aria-current", b.dataset.vista === e.vista);
+/** La cuenta de excepciones de la pestaña Conciliación: sale del resumen y se ve desde cualquier vista. */
+function pintarInsignia() {
   const excepciones = e.resumen?.hoy.excepciones ?? 0;
   const cuenta = $("#cuenta-excepciones");
   cuenta.hidden = !excepciones;
   cuenta.textContent = excepciones;
-  if (foco === "buscar") {
-    const campo = $("#buscar");
-    campo?.focus();
-    if (cursor !== null) campo?.setSelectionRange(cursor, cursor);
+}
+
+function pintar() {
+  if (!e.sesion) return; // sin sesión no hay nada de la cartera que mostrar
+  const campo = document.activeElement?.id === "buscar" ? document.activeElement : null;
+  // Lo que la persona lleva escrito en el buscador manda sobre lo último que se buscó.
+  const escrito = campo ? { valor: campo.value, cursor: campo.selectionStart } : null;
+  vista.innerHTML = VISTAS[e.vista]();
+  for (const b of $$(".pestanas button")) b.toggleAttribute("aria-current", b.dataset.vista === e.vista);
+  pintarInsignia();
+  const nuevo = escrito && $("#buscar");
+  if (nuevo) {
+    nuevo.value = escrito.valor;
+    nuevo.focus();
+    nuevo.setSelectionRange(escrito.cursor, escrito.cursor);
   }
 }
 
@@ -408,21 +421,43 @@ function pintarPanel() {
   if (qr && e.ficha?.qrFijo) qr.innerHTML = svgQr(e.ficha.qrFijo.qrString);
 }
 
-async function cargar(que = e.vista) {
+let turnoDeCarga = 0; // cada carga toma un turno: si llega otra más nueva, la vieja ya no escribe ni pinta
+
+/**
+ * Trae del servidor lo que necesita la vista en pantalla. Con `conResumen` trae además el resumen aunque la vista no
+ * lo use, para que la cuenta de excepciones de la pestaña esté al día cuando llega un pago en vivo.
+ */
+async function cargar({ conResumen = false } = {}) {
+  if (!e.sesion) return;
+  const turno = ++turnoDeCarga;
+  const vigente = () => turno === turnoDeCarga && e.sesion;
+  const que = e.vista;
   try {
-    if (que === "resumen" || que === "conciliacion") {
+    if (que === "resumen" || que === "conciliacion" || conResumen) {
       const [resumen, corte] = await Promise.all([api("/api/app/resumen"), api("/api/app/corte")]);
+      if (!vigente()) return;
       e.resumen = resumen;
       // Se conserva la comparación con pey mientras el corte no cambie.
       e.corte = e.corte?.pey && e.corte.recibidoCentavos === corte.recibidoCentavos && e.corte.pagos === corte.pagos ? { ...corte, pey: e.corte.pey } : corte;
     }
-    if (que === "conciliacion") e.conciliacion = await api(`/api/app/conciliacion?estado=${e.filtro}&pagina=${e.paginaPagos}`);
-    if (que === "cartera") e.cartera = await api(`/api/app/cartera?buscar=${encodeURIComponent(e.buscar)}&situacion=${e.situacion}&pagina=${e.paginaCartera}`);
+    if (que === "conciliacion") {
+      const conciliacion = await api(`/api/app/conciliacion?estado=${e.filtro}&pagina=${e.paginaPagos}`);
+      if (!vigente()) return;
+      e.conciliacion = conciliacion;
+    }
+    if (que === "cartera") {
+      const cartera = await api(`/api/app/cartera?buscar=${encodeURIComponent(e.buscar)}&situacion=${e.situacion}&pagina=${e.paginaCartera}`);
+      if (!vigente()) return;
+      e.cartera = cartera;
+    }
   } catch (error) {
-    if (error.status === 401) return salir("Tu clave ya no es válida. Entra de nuevo.");
+    if (!vigente()) return;
+    if (error.status === 401) return salir(CLAVE_VENCIDA);
     aviso(error.message, "mal");
   }
-  if (que === e.vista) pintar();
+  // Integración no muestra datos que cambien con un pago: no se vuelve a dibujar para no estorbar a quien revisa un archivo.
+  if (que === e.vista && que !== "integracion") pintar();
+  else pintarInsignia();
 }
 
 function ir(nombre) {
@@ -436,19 +471,25 @@ async function comparar() {
   e.comparando = true;
   pintar();
   try {
-    e.corte = await api("/api/app/corte?pey=1");
+    const corte = await api("/api/app/corte?pey=1");
+    if (!e.sesion) return;
+    turnoDeCarga++; // una carga que venía en camino traería el corte de antes de comparar
+    e.corte = corte;
   } catch (error) {
+    if (!e.sesion) return;
+    if (error.status === 401) return salir(CLAVE_VENCIDA);
     aviso(error.message, "mal");
+  } finally {
+    e.comparando = false;
   }
-  e.comparando = false;
   pintar();
 }
 
 let refresco = 0;
-/** Vuelve a cargar lo que está en pantalla poco después de un evento en vivo (varios eventos seguidos, una sola carga). */
+/** Pone al día la pantalla poco después de un evento en vivo (varios eventos seguidos, una sola carga). */
 function refrescarPronto() {
   clearTimeout(refresco);
-  refresco = setTimeout(() => cargar(e.vista === "integracion" ? "resumen" : e.vista), 350);
+  refresco = setTimeout(() => cargar({ conResumen: true }), 350);
 }
 
 async function descargar(ruta, nombre) {
@@ -477,16 +518,21 @@ function dialogoAsignar(tx, montoCentavos) {
       <button class="enlace" data-accion="cerrar-panel">Cancelar</button>
     </div>`;
   const campo = $("#buscar-credito");
+  const resultados = $("#resultados");
   let espera = 0;
+  let busqueda = 0; // solo la búsqueda más reciente escribe sus resultados
   campo.focus();
   campo.addEventListener("input", () => {
     clearTimeout(espera);
+    const turno = ++busqueda;
     espera = setTimeout(async () => {
       const texto = campo.value.trim();
-      if (!texto) return ($("#resultados").innerHTML = '<li class="nota">Escribe para buscar.</li>');
+      if (!texto) return (resultados.innerHTML = '<li class="nota">Escribe para buscar.</li>');
       try {
         const r = await api(`/api/app/cartera?buscar=${encodeURIComponent(texto)}`);
-        $("#resultados").innerHTML = r.creditos.length
+        // Llegó tarde (ya se escribió otra cosa) o el diálogo se cerró: no se toca nada.
+        if (turno !== busqueda || !resultados.isConnected) return;
+        resultados.innerHTML = r.creditos.length
           ? r.creditos
               .slice(0, 6)
               .map((k) => `<li><button data-accion="resolver" data-tx="${esc(tx)}" data-id="${esc(k.id)}" ${k.estado.saldoCentavos ? "" : "disabled"}>
@@ -494,7 +540,7 @@ function dialogoAsignar(tx, montoCentavos) {
               .join("")
           : '<li class="nota">Ningún crédito coincide.</li>';
       } catch (error) {
-        aviso(error.message, "mal");
+        if (turno === busqueda && resultados.isConnected) aviso(error.message, "mal");
       }
     }, 220);
   });
@@ -502,20 +548,54 @@ function dialogoAsignar(tx, montoCentavos) {
 
 // ------------------------------------------------------------------ Acciones
 
+/** Corre una acción y, si falla, lo dice. Si la clave dejó de servir, cierra la sesión. */
 async function conAviso(accion) {
   try {
     await accion();
   } catch (error) {
+    if (error.status === 401 && e.sesion) return salir(CLAVE_VENCIDA);
     aviso(error.message, "mal");
   }
 }
+
+/**
+ * Corre una acción con su botón apagado para que no se dispare dos veces. Si falla, el botón vuelve a quedar como
+ * estaba para poder reintentar; si sale bien, la pantalla se vuelve a dibujar y el botón ya no importa.
+ */
+async function conBoton(el, textoOcupado, accion) {
+  const texto = el.textContent;
+  el.disabled = true;
+  if (textoOcupado) el.textContent = textoOcupado;
+  try {
+    await accion();
+  } catch (error) {
+    if (el.isConnected) {
+      el.disabled = false;
+      el.textContent = texto;
+    }
+    if (error.status === 401 && e.sesion) return salir(CLAVE_VENCIDA);
+    aviso(error.message, "mal");
+  }
+}
+
+/** Después de importar o reiniciar la cartera es otra: se pide la sesión de nuevo y no se conserva nada de la anterior. */
+async function estrenarCartera(vistaInicial) {
+  const sesion = await api("/api/app/sesion");
+  if (!e.sesion) return;
+  turnoDeCarga++;
+  turnoDeFicha++;
+  Object.assign(e, datosEnBlanco(), { sesion });
+  capa.innerHTML = "";
+  ir(vistaInicial);
+}
+
+let turnoDeFicha = 0; // solo el último crédito pedido abre su panel
 
 const acciones = {
   ir: (el) => ir(el.dataset.vista),
   comparar,
   recuperar: (el) =>
-    conAviso(async () => {
-      el.disabled = true;
+    conBoton(el, "Recuperando…", async () => {
       const r = await api("/api/app/corte/recuperar", { cuerpo: { transactionId: el.dataset.tx } });
       aviso(r.duplicado ? "Ese pago ya estaba registrado." : `Pago recuperado de pey${r.creditoId ? ` y aplicado al crédito ${r.creditoId}` : ""}.`, "bien");
       await cargar();
@@ -538,9 +618,10 @@ const acciones = {
   plantilla: () => descargar("/api/app/cartera/plantilla.csv", "qadra-plantilla-cartera.csv"),
   "sim-sin-referencia": () =>
     conAviso(async () => {
-      await api("/api/app/simular", { cuerpo: { tipo: "sin-referencia", montoCentavos: 38_000 } });
-      aviso("Llegó una transferencia de $380.00 sin referencia: quedó por revisar.");
+      await api("/api/app/simular", { cuerpo: { tipo: "sin-referencia", montoCentavos: MONTO_SIN_REFERENCIA } });
+      aviso(`Llegó una transferencia de ${pesos(MONTO_SIN_REFERENCIA)} sin referencia: quedó por revisar.`);
       e.filtro = "excepcion";
+      e.paginaPagos = 1;
       await cargar();
     }),
   "sim-aviso-perdido": () =>
@@ -563,38 +644,40 @@ const acciones = {
     }),
   ficha: (el) =>
     conAviso(async () => {
-      e.ficha = await api(`/api/app/creditos/${encodeURIComponent(el.dataset.id)}`);
+      const turno = ++turnoDeFicha;
+      const ficha = await api(`/api/app/creditos/${encodeURIComponent(el.dataset.id)}`);
+      // Si mientras tanto se pidió otro crédito, se cerró el panel o se salió, esta respuesta ya no abre nada.
+      if (turno !== turnoDeFicha || !e.sesion) return;
+      e.ficha = ficha;
       pintarPanel();
     }),
   "cerrar-panel": () => {
+    turnoDeFicha++;
     e.ficha = null;
     capa.innerHTML = "";
   },
   "crear-qr-fijo": (el) =>
-    conAviso(async () => {
-      el.disabled = true;
-      el.textContent = "Creando el QR en pey…";
-      await api(`/api/app/creditos/${encodeURIComponent(e.ficha.credito.id)}/qr-fijo`, { metodo: "POST" });
-      e.ficha = await api(`/api/app/creditos/${encodeURIComponent(e.ficha.credito.id)}`);
+    conBoton(el, "Creando el QR en pey…", async () => {
+      // El crédito se anota antes de esperar: si la persona cierra el panel o abre otro, el QR se crea para el que pidió.
+      const id = e.ficha.credito.id;
+      const ruta = `/api/app/creditos/${encodeURIComponent(id)}`;
+      await api(`${ruta}/qr-fijo`, { metodo: "POST" });
+      const ficha = await api(ruta);
+      if (e.ficha?.credito.id !== id) return aviso(`QR fijo creado para el crédito ${id}.`, "bien");
+      e.ficha = ficha;
       pintarPanel();
     }),
   importar: (el) =>
-    conAviso(async () => {
-      el.disabled = true;
+    conBoton(el, "Importando…", async () => {
       const r = await api("/api/app/cartera/importar", { texto: e.archivo.texto });
       aviso(`Cartera importada: ${plural(r.creditos, "crédito", "créditos")} de ${plural(r.gestores, "gestor", "gestores")}.`, "bien");
-      e.archivo = null;
-      e.sesion = await api("/api/app/sesion");
-      ir("cartera");
+      await estrenarCartera("cartera");
     }),
   reiniciar: (el) =>
-    conAviso(async () => {
-      el.disabled = true;
+    conBoton(el, "Reiniciando…", async () => {
       await api("/api/app/reiniciar", { metodo: "POST" });
-      e.sesion = await api("/api/app/sesion");
-      e.corte = null;
       aviso("Demo reiniciada con la cartera de ejemplo de hoy.", "bien");
-      ir("resumen");
+      await estrenarCartera("resumen");
     }),
   copiar: async (el) => aviso((await copiar(el.dataset.texto)) ? "Copiado." : el.dataset.texto, "bien"),
 };
@@ -648,7 +731,7 @@ function abrirCanal() {
     (m) => {
       if (m.tipo === "pago") {
         e.nuevos.add(m.transactionId);
-        setTimeout(() => e.nuevos.delete(m.transactionId), 6000);
+        setTimeout(() => e.nuevos.delete(m.transactionId), RESALTADO_MS);
         if (m.origen !== "ejemplo") aviso(m.estado === "aplicado" ? `Pago conciliado: ${pesos(m.montoCentavos)} · ${m.acreditado ?? ""}` : `Pago por revisar: ${pesos(m.montoCentavos)}`, m.estado === "aplicado" ? "bien" : "");
       }
       refrescarPronto();
@@ -669,6 +752,7 @@ async function entrar(clave) {
     e.sesion = await api("/api/app/sesion");
   } catch (fallo) {
     e.clave = "";
+    if (fallo.status === 401) olvidarClave(); // una clave guardada que ya no sirve no se vuelve a intentar sola
     error.textContent = fallo.status === 401 ? "Esa clave no es correcta." : fallo.message;
     error.hidden = false;
     $("#entrada").hidden = false;
@@ -692,15 +776,23 @@ async function entrar(clave) {
   ir("resumen");
 }
 
-function salir(mensaje = "") {
-  canal?.cerrar();
+function olvidarClave() {
   try {
     localStorage.removeItem(LLAVE);
   } catch {
     // nada que borrar
   }
-  // Al salir no queda nada de la cartera en la página.
-  Object.assign(e, { clave: "", sesion: null, resumen: null, corte: null, conciliacion: null, cartera: null, ficha: null, archivo: null });
+}
+
+function salir(mensaje = "") {
+  canal?.cerrar();
+  clearTimeout(refresco);
+  clearTimeout(esperaDeBusqueda);
+  turnoDeCarga++; // lo que venga en camino ya no escribe ni pinta
+  turnoDeFicha++;
+  olvidarClave();
+  // Al salir no queda nada de la cartera en la página: ni datos, ni búsquedas, ni filtros.
+  Object.assign(e, { clave: "", sesion: null, vista: "resumen" }, datosEnBlanco());
   vista.innerHTML = "";
   capa.innerHTML = "";
   $("#marco").hidden = true;

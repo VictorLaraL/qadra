@@ -10,6 +10,7 @@ let demo = null;
 let vista = "credito"; // credito | qr | pagado
 let ultimoPago = null;
 let regreso = 0;
+let conectado = false; // si el canal en vivo está abierto; se declara aquí porque los botones lo consultan
 
 const palomita = '<svg viewBox="0 0 52 52" aria-hidden="true"><polyline points="12,27 22,37 40,17"/></svg>';
 const marca = () => `${isotipo(30, { claro: true })}<span><b>Qadra</b><small>Cobranza Inteligente</small></span>`;
@@ -38,12 +39,14 @@ function pintarTelefono() {
   }
   const monto = pesos(demo.qr.montoCentavos);
   if (vista === "pagado" && ultimoPago) {
+    // El número de cuota llega por el canal en vivo: solo se escribe en la página si de verdad es un número.
+    const cuota = Number.isInteger(ultimoPago.cuota) && ultimoPago.cuota > 0 ? ultimoPago.cuota : null;
     cuerpo.innerHTML = `<div class="td-pagado">
       <div class="palomita">${palomita}</div>
       <b class="td-titulo">Pagado</b>
       <p class="monto">${pesos(ultimoPago.montoCentavos)} con CoDi · ${esc(hora(ultimoPago.fecha))}</p>
       <dl>
-        <div><dt>Aplicado</dt><dd>${ultimoPago.cuota ? `Abono a la cuota ${ultimoPago.cuota}` : "Por revisar"}</dd></div>
+        <div><dt>Aplicado</dt><dd>${cuota ? `Abono a la cuota ${cuota}` : "Por revisar"}</dd></div>
         <div><dt>Clave de rastreo</dt><dd class="mono">${esc(ultimoPago.claveRastreo ?? "—")}</dd></div>
         ${ultimoPago.banco ? `<div><dt>Banco</dt><dd>${esc(ultimoPago.banco)}</dd></div>` : ""}
       </dl>
@@ -104,6 +107,22 @@ function alPagar(pago) {
   }, 12_000);
 }
 
+const ESPERA_CON_CANAL_MS = 2500; // margen para que "Pagado" llegue solo por el canal en vivo
+const ESPERA_SIN_CANAL_MS = 600; // sin canal no hay a quién esperar: se consulta casi de inmediato
+const huella = (pago) => (pago ? `${pago.fecha}|${pago.claveRastreo ?? ""}|${pago.montoCentavos}` : "");
+
+/**
+ * Respaldo del botón de simular. "Pagado" llega normalmente por el canal en vivo; si no llegó, se consulta la demo y
+ * se muestra el pago solo si de verdad hay uno nuevo (distinto del último que ya estaba antes de simular).
+ */
+async function confirmarSinCanal(antes) {
+  if (vista !== "qr") return; // el canal en vivo ya lo mostró, o la persona se fue a otra pantalla
+  await cargar();
+  const ultimo = demo?.ultimos?.[0];
+  if (vista !== "qr" || !ultimo || huella(ultimo) === antes.huella) return;
+  alPagar({ ...ultimo, cuota: antes.cuota });
+}
+
 cuerpo.addEventListener("click", async (evento) => {
   const boton = evento.target.closest("[data-accion]");
   if (!boton) return;
@@ -121,10 +140,11 @@ cuerpo.addEventListener("click", async (evento) => {
   if (accion === "simular") {
     boton.disabled = true;
     boton.textContent = "Simulando el pago…";
+    // Lo que había antes de simular: el último pago (para reconocer el nuevo) y la cuota a la que se va a abonar.
+    const antes = { huella: huella(demo.ultimos?.[0]), cuota: demo.credito?.cuota?.numero ?? null };
     try {
       await api("/api/demo/simular", { metodo: "POST" });
-      // El "Pagado" llega por el canal en vivo; si no hay canal, se consulta.
-      setTimeout(() => vista === "qr" && cargar().then(() => demo.ultimos[0] && alPagar({ ...demo.ultimos[0], cuota: demo.credito?.cuota?.numero })), 1500);
+      setTimeout(() => confirmarSinCanal(antes), conectado ? ESPERA_CON_CANAL_MS : ESPERA_SIN_CANAL_MS);
     } catch (error) {
       aviso(error.message, "mal");
       boton.disabled = false;
@@ -138,7 +158,6 @@ $("#texto-cierre").textContent = demo?.simulacion
   ? 'La demo está en modo simulación: entra a la app del gestor y al portal con la clave "demo".'
   : "Entra a la app del gestor y al portal con la clave de jurado del formulario de entrega.";
 
-let conectado = false;
 enVivo(
   () => direccionWs("/api/demo/en-vivo"),
   (m) => m.tipo === "pago" && alPagar(m),

@@ -1,18 +1,24 @@
 // Dibujo del QR CoDi. Usa qrcode-generator 1.4.4 (/vendor), cargado como script global.
 
 const TINTA = "#0E1A33";
+const MARGEN = 4; // zona de silencio en módulos: lo mínimo que pide el estándar para que el QR se lea bien
 
+let listo = false;
 function crearQr(texto) {
   const qrcode = globalThis.qrcode;
-  qrcode.stringToBytes = qrcode.stringToBytesFuncs["UTF-8"];
+  if (!listo) {
+    // La librería trae Shift-JIS por omisión; CoDi usa UTF-8. Se configura una sola vez.
+    qrcode.stringToBytes = qrcode.stringToBytesFuncs["UTF-8"];
+    listo = true;
+  }
   const qr = qrcode(0, "M");
   qr.addData(texto, "Byte");
   qr.make();
   return qr;
 }
 
-/** SVG del QR con zona de silencio de 4 módulos; escala al tamaño de su contenedor. */
-export function svgQr(texto, { color = TINTA, margen = 4 } = {}) {
+/** SVG del QR con su zona de silencio; escala al tamaño de su contenedor. */
+export function svgQr(texto, { color = TINTA, margen = MARGEN } = {}) {
   const qr = crearQr(texto);
   const n = qr.getModuleCount();
   let trazo = "";
@@ -32,7 +38,7 @@ export function svgQr(texto, { color = TINTA, margen = 4 } = {}) {
 export function descargarPng(texto, nombreArchivo, escala = 12) {
   const qr = crearQr(texto);
   const n = qr.getModuleCount();
-  const margen = 4;
+  const margen = MARGEN;
   const lienzo = document.createElement("canvas");
   lienzo.width = lienzo.height = (n + margen * 2) * escala;
   const ctx = lienzo.getContext("2d");

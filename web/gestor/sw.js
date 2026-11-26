@@ -3,14 +3,18 @@
 // nueva se ve en cuanto hay conexión; la copia guardada solo se usa cuando la red falla.
 // El API (/api) nunca se guarda: la última ruta vive en localStorage y las visitas sin enviar, en una cola.
 
-const CACHE = "qadra-gestor-v1";
-const APP = ["/gestor/", "/gestor/gestor.css", "/gestor/gestor.js", "/estilos.css", "/comun.js", "/qr.js", "/vendor/qrcode-1.4.4.js", "/marca/icono.svg"];
+// Al agregar o quitar archivos de la app se sube la versión, para que el teléfono guarde la lista nueva completa.
+const CACHE = "qadra-gestor-v2";
+const APP = ["/gestor/", "/gestor/gestor.css", "/gestor/gestor.js", "/estilos.css", "/comun.js", "/qr.js", "/reglas.js", "/vendor/qrcode-1.4.4.js", "/marca/icono.svg"];
 
 self.addEventListener("install", (evento) => {
+  // Cada archivo se guarda por separado: si uno falla (sin espacio, red a medias), los demás quedan guardados y el
+  // service worker se instala de todos modos; lo que falte se guarda la próxima vez que se pida con señal.
   evento.waitUntil(
     caches
       .open(CACHE)
-      .then((cache) => cache.addAll(APP))
+      .then((cache) => Promise.allSettled(APP.map((ruta) => cache.add(ruta))))
+      .catch(() => {})
       .then(() => self.skipWaiting()),
   );
 });
@@ -36,7 +40,13 @@ self.addEventListener("fetch", (evento) => {
       .then((respuesta) => {
         if (respuesta.ok) {
           const copia = respuesta.clone();
-          caches.open(CACHE).then((cache) => cache.put(solicitud, copia));
+          // La copia se guarda aparte: si no se puede guardar, la respuesta que sí llegó se entrega igual.
+          evento.waitUntil(
+            caches
+              .open(CACHE)
+              .then((cache) => cache.put(solicitud, copia))
+              .catch(() => {}),
+          );
         }
         return respuesta;
       })

@@ -3,11 +3,13 @@
 
 import { $, aviso, copiar, crearApi, diaLargo, direccionWs, enVivo, esc, hora, isotipo, NOMBRE_DE_VISITA, pesos, plural, situacion, sonarPagado } from "/comun.js";
 import { descargarPng, svgQr } from "/qr.js";
+import { aCentavos, destinoDeVisitaEnCola, estadoDeCuota } from "/reglas.js";
 
 const app = $("#app");
 
 // ------------------------------------------------------------------ Memoria del teléfono
-const LLAVE = { clave: "qadra.clave", gestor: "qadra.gestor", cola: "qadra.cola", ruta: "qadra.ruta" };
+// La sesión y la ruta se guardan para poder abrir la app sin señal; la cola son las visitas que faltan por enviar.
+const LLAVE = { clave: "qadra.clave", gestor: "qadra.gestor", cola: "qadra.cola", ruta: "qadra.ruta", sesion: "qadra.sesion" };
 function leer(llave, porDefecto) {
   try {
     const valor = localStorage.getItem(llave);
@@ -31,9 +33,11 @@ const e = {
   clave: leer(LLAVE.clave, ""),
   publico: null, // /api/estado
   sesion: null,
+  sesionGuardada: false, // true = la app abrió sin señal con la última sesión guardada en el teléfono
   gestorId: leer(LLAVE.gestor, "g1"),
   ruta: null,
   rutaGuardada: false, // true = se está mostrando la última ruta guardada, sin conexión
+  errorDeRuta: "", // por qué no hay ruta que mostrar (sin señal y sin ruta guardada, por ejemplo)
   ficha: null,
   cobro: null,
   linkPago: "",
@@ -71,15 +75,25 @@ function barra(titulo, { volver = false, derecha = "" } = {}) {
 function avisosDeEstado() {
   const partes = [];
   if (!e.enLinea) partes.push('<div class="franja">Sin conexión. Lo que registres se envía al reconectar.</div>');
-  else if (e.rutaGuardada) partes.push('<div class="franja">Mostrando la última ruta guardada.</div>');
+  else if (e.rutaGuardada || e.sesionGuardada) partes.push('<div class="franja">Mostrando la última ruta guardada.</div>');
   if (e.cola.length) partes.push(`<div class="franja azul">${plural(e.cola.length, "visita", "visitas")} por enviar.</div>`);
   const h = e.sesion?.horario;
-  if (h && !h.dentro) {
+  // Con la sesión guardada no se sabe la hora del servidor: el aviso de horario se muestra solo con datos frescos.
+  if (h && !h.dentro && !e.sesionGuardada) {
     partes.push(
       `<div class="franja">Fuera del horario de gestión (${h.desde}:00 a ${h.hasta}:00). ${h.estricto ? "No se pueden registrar cobros ni visitas." : "En la demo puedes continuar; en operación se bloquea."}</div>`,
     );
   }
-  return partes.join("");
+  return `<div id="estado">${partes.join("")}</div>`;
+}
+
+/**
+ * Actualiza solo las franjas de estado, sin volver a dibujar la pantalla: si se va la señal mientras el gestor llena
+ * una visita, lo que lleva escrito no se pierde.
+ */
+function refrescarEstado() {
+  const el = $("#estado");
+  if (el) el.outerHTML = avisosDeEstado();
 }
 
 // ------------------------------------------------------------------ Vistas
@@ -121,7 +135,13 @@ function tarjetaDeVisita(v, indice) {
 
 function vistaRuta() {
   const r = e.ruta;
-  if (!r) return barra("Ruta de hoy") + cinta() + avisosDeEstado() + '<p class="cargando">Cargando tu ruta…</p>';
+  if (!r) {
+    const cuerpo = e.errorDeRuta
+      ? `<div class="vacio"><p>${esc(e.errorDeRuta)}</p>
+           <p><button class="boton chico" data-accion="actualizar">Reintentar</button> <button class="enlace" data-accion="salir">Salir</button></p></div>`
+      : '<p class="cargando">Cargando tu ruta…</p>';
+    return barra("Ruta de hoy") + cinta() + avisosDeEstado() + cuerpo;
+  }
   const porcentaje = r.resumen.total ? Math.round((r.resumen.hechas / r.resumen.total) * 100) : 0;
   return `${barra("Ruta de hoy", { derecha: `<span class="barra-progreso">${r.resumen.hechas} de ${r.resumen.total}</span>` })}
     ${cinta()}${avisosDeEstado()}
@@ -169,9 +189,7 @@ function calendario(f) {
   const hoy = e.sesion.hoy;
   return `<ol class="calendario">${f.cuotas
     .map((c) => {
-      const pagada = c.pagadoCentavos >= c.montoCentavos;
-      const clase = pagada ? "pagada" : c.pagadoCentavos > 0 ? "parcial" : c.vence < hoy ? "vencida" : c.vence === hoy ? "hoy" : "";
-      const texto = pagada ? "pagada" : c.pagadoCentavos > 0 ? "con abono" : c.vence < hoy ? "vencida" : c.vence === hoy ? "vence hoy" : "por vencer";
+      const { clase, texto } = estadoDeCuota(c, hoy);
       return `<li class="${clase}" title="Cuota ${c.numero} · ${esc(c.vence)} · ${texto}"><span class="solo-lectores">Cuota </span>${c.numero}<span class="solo-lectores">: ${texto}</span></li>`;
     })
     .join("")}</ol>
@@ -185,6 +203,7 @@ function vistaFicha() {
   const s = situacion(c.estado);
   const actual = c.estado.cuotaActual;
   const abonado = actual ? Math.round((actual.pagadoCentavos / actual.montoCentavos) * 100) : 100;
+  const h = e.sesion.horario; // el horario de gestión lo dicta el servidor: aquí solo se repite
   return `${barra(`Crédito ${c.id}`, { volver: true })}${cinta()}${avisosDeEstado()}
     <section class="ficha-cabeza">
       <span class="etiqueta ${s.clase}">${esc(s.texto)}</span>
@@ -209,7 +228,7 @@ function vistaFicha() {
     </div>
     <section class="bloque"><h3>Movimientos</h3>${movimientos(f)}</section>
     <section class="bloque"><h3>Calendario de pagos</h3>${calendario(f)}</section>
-    <p class="regla">Solo se contacta al titular del crédito, de 7:00 a 22:00. Nunca a familiares, vecinos ni referencias.</p>`;
+    <p class="regla">Solo se contacta al titular del crédito${h ? `, de ${h.desde}:00 a ${h.hasta}:00` : ""}. Nunca a familiares, vecinos ni referencias.</p>`;
 }
 
 function opcionesDeMonto() {
@@ -381,35 +400,75 @@ function ir(vista, hoja = null) {
 
 // ------------------------------------------------------------------ Datos
 
-async function cargarRuta({ silencio = false } = {}) {
-  try {
-    e.ruta = await api(`/api/app/ruta?gestor=${encodeURIComponent(e.gestorId)}`);
-    e.rutaGuardada = false;
-    guardar(LLAVE.ruta, { gestorId: e.gestorId, ruta: e.ruta });
-  } catch (error) {
-    if (error.status === 404 && e.sesion.gestores.length) {
-      // El gestor guardado ya no existe (por ejemplo, se cargó otra cartera): se usa el primero.
-      e.gestorId = e.sesion.gestores[0].id;
-      guardar(LLAVE.gestor, e.gestorId);
-      return cargarRuta({ silencio });
-    }
-    if (error.status === 401) return salir("Tu clave ya no es válida. Entra de nuevo.");
-    const guardada = leer(LLAVE.ruta, null);
-    if (error.status === 0 && guardada?.gestorId === e.gestorId) {
-      e.ruta = guardada.ruta;
-      e.rutaGuardada = true;
-    } else if (!silencio) aviso(error.message, "mal");
-  }
-  if (e.vista === "ruta" || e.vista === "pagado") pintar();
+const CLAVE_VENCIDA = "Tu clave ya no es válida. Entra de nuevo.";
+
+let turnoDeRuta = 0; // cada carga de la ruta toma un turno: solo la más reciente puede pintar
+let rutaEnCurso = Promise.resolve("fallo");
+
+/**
+ * Carga la ruta del gestor elegido. Promete cómo le fue:
+ * "ok" (ruta fresca), "guardada" (sin conexión: se muestra la última), "fallo" o "relevada" (otra carga más nueva
+ * tomó su lugar, o la sesión se cerró mientras tanto).
+ */
+function cargarRuta(opciones) {
+  rutaEnCurso = pedirRuta(opciones);
+  return rutaEnCurso;
 }
 
+async function pedirRuta({ silencio = false, reintento = false } = {}) {
+  const turno = ++turnoDeRuta;
+  const gestorId = e.gestorId;
+  let resultado = "fallo";
+  try {
+    const ruta = await api(`/api/app/ruta?gestor=${encodeURIComponent(gestorId)}`);
+    if (turno !== turnoDeRuta || !e.sesion) return "relevada";
+    e.ruta = ruta;
+    e.rutaGuardada = false;
+    e.errorDeRuta = "";
+    guardar(LLAVE.ruta, { gestorId, ruta });
+    resultado = "ok";
+  } catch (error) {
+    if (turno !== turnoDeRuta || !e.sesion) return "relevada";
+    if (error.status === 401) {
+      salir(CLAVE_VENCIDA);
+      return "fallo";
+    }
+    const primero = e.sesion.gestores[0]?.id;
+    if (error.status === 404 && !reintento && primero && primero !== gestorId) {
+      // El gestor guardado ya no existe (por ejemplo, se cargó otra cartera): se usa el primero, y solo una vez.
+      e.gestorId = primero;
+      guardar(LLAVE.gestor, primero);
+      return pedirRuta({ silencio, reintento: true });
+    }
+    const guardada = leer(LLAVE.ruta, null);
+    if (error.status === 0 && guardada?.gestorId === gestorId) {
+      e.ruta = guardada.ruta;
+      e.rutaGuardada = true;
+      e.errorDeRuta = "";
+      resultado = "guardada";
+    } else {
+      if (!e.ruta) e.errorDeRuta = error.status === 0 ? "Sin conexión, y este teléfono no tiene guardada la ruta de este gestor." : error.message;
+      if (!silencio) aviso(error.message, "mal");
+    }
+  }
+  if (e.vista === "ruta" || e.vista === "pagado") pintar();
+  return resultado;
+}
+
+let fichaPedida = "";
 async function abrirFicha(id) {
   e.ficha = null;
+  fichaPedida = id;
   ir("ficha");
+  // Si la persona regresa y abre otro crédito, la respuesta de este ya no aplica.
+  const sigueAqui = () => e.vista === "ficha" && e.ficha === null && fichaPedida === id;
   try {
-    e.ficha = await api(`/api/app/creditos/${encodeURIComponent(id)}`);
+    const ficha = await api(`/api/app/creditos/${encodeURIComponent(id)}`);
+    if (!sigueAqui()) return;
+    e.ficha = ficha;
     pintar();
   } catch (error) {
+    if (!sigueAqui()) return;
     aviso(error.message, "mal");
     ir("ruta");
   }
@@ -436,50 +495,88 @@ async function entrar(clave) {
   pintar();
   try {
     e.sesion = await api("/api/app/sesion");
+    e.sesionGuardada = false;
     guardar(LLAVE.clave, e.clave);
-    if (!e.sesion.gestores.some((g) => g.id === e.gestorId)) e.gestorId = e.sesion.gestores[0]?.id ?? "g1";
-    e.ocupado = false;
-    ir("ruta");
-    abrirCanal();
-    await cargarRuta();
-    enviarCola();
+    guardar(LLAVE.sesion, e.sesion);
   } catch (error) {
-    e.ocupado = false;
-    e.clave = "";
-    e.error = error.status === 401 ? "Esa clave no es correcta." : error.message;
-    e.vista = "entrada";
-    pintar();
+    // Sin señal al abrir la app: si este teléfono ya había entrado con esta misma clave, se trabaja con lo guardado
+    // (la ruta sale de la memoria del teléfono y las visitas se van a la cola).
+    const guardada = error.status === 0 && e.clave && e.clave === leer(LLAVE.clave, "") ? leer(LLAVE.sesion, null) : null;
+    if (!guardada?.gestores) {
+      if (error.status === 401) olvidarSesion(); // la clave guardada dejó de servir: no se vuelve a intentar sola
+      e.ocupado = false;
+      e.clave = "";
+      e.error = error.status === 401 ? "Esa clave no es correcta." : error.message;
+      e.vista = "entrada";
+      return pintar();
+    }
+    e.sesion = guardada;
+    e.sesionGuardada = true;
+  }
+  if (!e.sesion.gestores.some((g) => g.id === e.gestorId)) e.gestorId = e.sesion.gestores[0]?.id ?? "g1";
+  e.ocupado = false;
+  ir("ruta");
+  abrirCanal();
+  await cargarRuta({ silencio: e.sesionGuardada });
+  enviarCola();
+}
+
+/** Al volver la señal se pide la sesión otra vez: la guardada puede ser de ayer (fecha, horario, gestores). */
+async function refrescarSesion() {
+  try {
+    const sesion = await api("/api/app/sesion");
+    if (!e.sesion) return;
+    e.sesion = sesion;
+    e.sesionGuardada = false;
+    guardar(LLAVE.sesion, sesion);
+  } catch (error) {
+    if (error.status === 401 && e.sesion) salir(CLAVE_VENCIDA);
   }
 }
 
-function salir(mensaje = "") {
-  canal?.cerrar();
-  clearInterval(vigilancia);
-  e.clave = "";
-  e.sesion = null;
-  e.ruta = null;
-  e.ficha = null;
-  e.cobro = null;
+function olvidarSesion() {
   try {
-    localStorage.removeItem(LLAVE.clave);
-    localStorage.removeItem(LLAVE.ruta);
+    for (const llave of [LLAVE.clave, LLAVE.sesion, LLAVE.ruta]) localStorage.removeItem(llave);
   } catch {
     // nada que borrar
   }
+}
+
+/**
+ * Cierra la sesión y borra del teléfono la clave, la sesión y la ruta.
+ * Las visitas sin enviar NO se borran: son evidencia del trabajo del gestor y se envían al volver a entrar.
+ */
+function salir(mensaje = "") {
+  canal?.cerrar();
+  clearInterval(vigilancia);
+  turnoDeRuta++; // lo que venga en camino ya no se pinta
+  Object.assign(e, { clave: "", sesion: null, sesionGuardada: false, ruta: null, rutaGuardada: false, errorDeRuta: "", ficha: null, cobro: null, recibo: null, linkPago: "" });
+  olvidarSesion();
   ir("entrada");
   e.error = mensaje;
   pintar();
 }
 
-// ------------------------------------------------------------------ Cobro
-
-function aCentavos(texto) {
-  const limpio = String(texto).replace(/[\s$,]/g, "");
-  return /^\d+(\.\d{1,2})?$/.test(limpio) ? Math.round(Number(limpio) * 100) : null;
+/** La salida que pide la persona: antes se intenta mandar lo que esté en la cola, y se le dice si algo quedó. */
+async function cerrarSesion() {
+  await enviarCola();
+  if (!e.sesion) return; // la sesión se cerró sola mientras se enviaba (clave vencida)
+  const pendientes = e.cola.length;
+  salir();
+  if (pendientes) {
+    aviso(
+      pendientes === 1
+        ? "1 visita queda guardada en este teléfono y se envía al volver a entrar."
+        : `${pendientes} visitas quedan guardadas en este teléfono y se envían al volver a entrar.`,
+    );
+  }
 }
+
+// ------------------------------------------------------------------ Cobro
 
 function errorDeHoja(id, mensaje) {
   const el = $(id);
+  if (!el) return aviso(mensaje, "mal"); // la hoja ya se cerró: el error se dice de todos modos
   el.textContent = mensaje;
   el.hidden = false;
   el.scrollIntoView({ block: "nearest" });
@@ -491,11 +588,17 @@ async function generarCobro(forma) {
   const montoCentavos = elegido?.value === "otro" ? aCentavos(datos.get("otro")) : Number(elegido?.dataset.centavos);
   if (!montoCentavos) return errorDeHoja("#error-cobro", "Escribe un monto mayor que cero, por ejemplo 150.00.");
   const medio = datos.get("medio");
+  const creditoId = e.ficha.credito.id;
   const boton = forma.querySelector("button.boton");
   boton.disabled = true;
   boton.textContent = medio === "push" ? "Enviando a su celular…" : "Generando QR…";
   try {
-    const r = await api("/api/app/cobros", { cuerpo: { creditoId: e.ficha.credito.id, montoCentavos, medio, telefono: datos.get("telefono") } });
+    const r = await api("/api/app/cobros", { cuerpo: { creditoId, montoCentavos, medio, telefono: datos.get("telefono") } });
+    if (e.vista !== "ficha" || e.ficha?.credito.id !== creditoId) {
+      // La persona se fue a otra pantalla mientras se creaba: el cobro existe, así que se le avisa en vez de imponérselo.
+      if (e.sesion) aviso(`El cobro del crédito ${creditoId} se generó (folio ${r.cobro.folio}). Ábrelo de nuevo para cobrarlo.`);
+      return;
+    }
     e.cobro = r.cobro;
     e.linkPago = r.linkPago;
     ir("cobro");
@@ -512,8 +615,11 @@ let revisando = false;
 async function revisarCobro() {
   if (revisando || !e.cobro || e.vista !== "cobro") return;
   revisando = true;
+  const id = e.cobro.id;
   try {
-    const r = await api(`/api/app/cobros/${e.cobro.id}`);
+    const r = await api(`/api/app/cobros/${id}`);
+    // Mientras llegaba la respuesta la persona pudo salir de este cobro o generar otro: esa respuesta ya no aplica.
+    if (e.vista !== "cobro" || e.cobro?.id !== id) return;
     if (r.cobro.estado === "pagado" && r.recibo) {
       clearInterval(vigilancia);
       e.cobro = r.cobro;
@@ -586,54 +692,84 @@ async function guardarVisita(forma) {
     guardar(LLAVE.cola, e.cola);
     aviso("Sin señal. Guardamos la visita y la enviamos al reconectar.");
   }
-  e.hoja = null;
-  await abrirFichaSilenciosa();
-  cargarRuta({ silencio: true });
+  if (!e.sesion) return;
+  // La hoja solo se cierra si la persona sigue en el crédito de esta visita.
+  if (e.vista === "ficha" && e.ficha?.credito.id === visita.creditoId) {
+    e.hoja = null;
+    await abrirFichaSilenciosa();
+  }
+  if (e.sesion) cargarRuta({ silencio: true });
 }
 
+/** Pone al día la ficha abierta sin avisar si falla. No pisa otra ficha ni una hoja que la persona esté llenando. */
 async function abrirFichaSilenciosa() {
+  const id = e.ficha?.credito.id;
+  if (!id) return;
   try {
-    e.ficha = await api(`/api/app/creditos/${encodeURIComponent(e.ficha.credito.id)}`);
+    const ficha = await api(`/api/app/creditos/${encodeURIComponent(id)}`);
+    if (e.ficha?.credito.id === id) e.ficha = ficha;
   } catch {
     // se queda la ficha que ya estaba en pantalla
   }
-  pintar();
+  if (e.vista === "ficha" && !e.hoja) pintar();
 }
 
-let enviando = false;
-async function enviarCola() {
-  if (enviando || !e.cola.length || !e.sesion) return;
-  enviando = true;
-  const pendientes = [...e.cola];
+let envioEnCurso = null;
+/** Manda las visitas guardadas sin conexión. Si ya hay un envío en curso, promete ese mismo. */
+function enviarCola() {
+  if (!e.cola.length || !e.sesion) return Promise.resolve();
+  envioEnCurso ??= vaciarCola().finally(() => (envioEnCurso = null));
+  return envioEnCurso;
+}
+
+async function vaciarCola() {
   let enviadas = 0;
-  for (const visita of pendientes) {
+  let rechazadas = 0;
+  let claveVencida = false;
+  for (const visita of [...e.cola]) {
     try {
       await api("/api/app/gestiones", { cuerpo: visita });
       enviadas++;
     } catch (error) {
-      if (error.status === 0) break; // sigue sin señal: se intenta después
-      // el servidor la rechazó (por ejemplo, el crédito ya no existe): no tiene caso reintentar
+      if (destinoDeVisitaEnCola(error.status) === "conservar") {
+        claveVencida = error.status === 401;
+        // Sin red, sin sesión o con el límite de uso alcanzado, las demás fallarían igual: se dejan para después.
+        if (error.status === 0 || error.status === 401 || error.status === 429) break;
+        continue; // falla de esta visita en el servidor: se conserva y se sigue con las demás
+      }
+      rechazadas++; // el servidor dijo que no es válida (o el crédito ya no existe): reintentar no la arregla
     }
     e.cola = e.cola.filter((v) => v !== visita);
     guardar(LLAVE.cola, e.cola);
   }
-  enviando = false;
-  if (enviadas) {
-    aviso(`${plural(enviadas, "visita enviada", "visitas enviadas")}.`, "bien");
-    cargarRuta({ silencio: true });
-  }
+  if (enviadas) aviso(`${plural(enviadas, "visita enviada", "visitas enviadas")}.`, "bien");
+  if (rechazadas) aviso(rechazadas === 1 ? "El servidor rechazó 1 visita guardada: no se registró." : `El servidor rechazó ${rechazadas} visitas guardadas: no se registraron.`, "mal");
+  if (!e.sesion) return;
+  if (claveVencida) return salir(`${CLAVE_VENCIDA} Tus visitas siguen guardadas en este teléfono.`);
+  if (enviadas) cargarRuta({ silencio: true });
   if (e.vista === "ruta") pintar();
+  else refrescarEstado();
 }
 
 // ------------------------------------------------------------------ Eventos
 
 const acciones = {
   "entrar-demo": () => entrar("demo"),
-  actualizar: async () => {
-    await cargarRuta();
-    aviso(e.rutaGuardada ? "Sin conexión: sigue la última ruta guardada." : "Ruta actualizada.");
+  actualizar: async (el) => {
+    el.disabled = true;
+    if (e.sesionGuardada) await refrescarSesion();
+    if (!e.sesion) return;
+    const resultado = await cargarRuta();
+    // Si falló, cargarRuta ya dijo por qué: aquí solo se confirma lo que sí pasó.
+    if (resultado === "ok") aviso("Ruta actualizada.", "bien");
+    if (resultado === "guardada") aviso("Sin conexión: sigue la última ruta guardada.");
+    if (el.isConnected) el.disabled = false;
+    if (e.sesion) enviarCola();
   },
-  salir: () => salir(),
+  salir: (el) => {
+    el.disabled = true;
+    cerrarSesion();
+  },
   abrir: (el) => abrirFicha(el.dataset.id),
   volver: () => {
     if (e.vista === "cobro") return ir("ficha"), abrirFichaSilenciosa();
@@ -644,7 +780,7 @@ const acciones = {
   "elegir-gestor": (el) => {
     e.gestorId = el.dataset.id;
     guardar(LLAVE.gestor, e.gestorId);
-    e.ruta = null;
+    Object.assign(e, { ruta: null, rutaGuardada: false, errorDeRuta: "" });
     ir("ruta");
     cargarRuta();
   },
@@ -666,8 +802,13 @@ const acciones = {
       el.textContent = "Simular que ya pagó";
     }
   },
-  siguiente: () => {
-    const siguiente = e.ruta?.visitas.find((v) => v.visita === "pendiente");
+  siguiente: async (el) => {
+    el.disabled = true;
+    await rutaEnCurso; // la ruta se está poniendo al día con el pago recién recibido
+    if (e.vista !== "pagado") return;
+    // Si la ruta no alcanzó a actualizarse (sin señal), al menos no se regresa al crédito que se acaba de cobrar.
+    const cobrado = e.ficha?.credito.id;
+    const siguiente = e.ruta?.visitas.find((v) => v.visita === "pendiente" && v.creditoId !== cobrado);
     if (siguiente) return abrirFicha(siguiente.creditoId);
     ir("ruta");
     aviso("Ruta terminada. Buen trabajo.", "bien");
@@ -699,19 +840,27 @@ app.addEventListener("focusin", (evento) => {
   if (evento.target.classList?.contains("otro-monto")) evento.target.closest("label").querySelector('input[type="radio"]').checked = true;
 });
 
-window.addEventListener("online", () => {
+window.addEventListener("online", async () => {
   e.enLinea = true;
-  if (e.sesion) {
-    cargarRuta({ silencio: true });
-    enviarCola();
-  }
+  if (!e.sesion) return;
+  refrescarEstado();
+  await refrescarSesion();
+  if (!e.sesion) return;
+  cargarRuta({ silencio: true });
+  enviarCola();
 });
 window.addEventListener("offline", () => {
   e.enLinea = false;
-  if (e.sesion) pintar();
+  if (!e.sesion) return;
+  // Con una hoja abierta solo cambian las franjas: no se borra lo que el gestor lleva escrito.
+  if (e.hoja) refrescarEstado();
+  else pintar();
 });
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && e.sesion && e.vista === "ruta") cargarRuta({ silencio: true });
+document.addEventListener("visibilitychange", async () => {
+  if (document.hidden || !e.sesion) return;
+  if (e.sesionGuardada) await refrescarSesion();
+  if (e.sesion && e.vista === "ruta") cargarRuta({ silencio: true });
+  if (e.sesion) enviarCola();
 });
 
 // ------------------------------------------------------------------ Arranque
